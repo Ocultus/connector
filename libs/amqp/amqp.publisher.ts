@@ -1,6 +1,6 @@
 import * as amqp from "amqplib";
 export class AmqpPublisher {
-  private channel: amqp.Channel;
+  private channel!: amqp.Channel;
   constructor(
     private readonly connection: amqp.Connection,
     private readonly exchange: string

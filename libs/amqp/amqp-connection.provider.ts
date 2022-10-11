@@ -1,11 +1,13 @@
 import * as amqp from "amqplib";
 export type Options = {
-  name: string;
+  name?: string;
   options: amqp.Options.Connect;
 };
 export class AmqpConnectionProvider {
-  private connections!: Map<string, amqp.Connection>;
-  constructor(private readonly options: Array<Options> | Options) {}
+  private connections: Map<string, amqp.Connection>;
+  constructor(private readonly options: Array<Required<Options>> | Options) {
+    this.connections = new Map();
+  }
 
   public init = async () => {
     if (Array.isArray(this.options)) {
@@ -17,7 +19,7 @@ export class AmqpConnectionProvider {
           } catch (e) {
             console.error({
               event: this.init,
-              message: e.message,
+              message: (e as any).message,
             });
           }
         })
@@ -29,7 +31,7 @@ export class AmqpConnectionProvider {
       } catch (e) {
         console.error({
           event: this.init,
-          message: e.message,
+          message: (e as any).message,
         });
       }
     }

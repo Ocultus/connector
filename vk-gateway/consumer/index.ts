@@ -7,10 +7,9 @@ class Consumer {
   private amqpConsumer!: AmqpConsumer;
   private vkGroupProvider!: VkGroupProvider;
   //TODO refactor
-  private group: number;
+  private group!: number;
   constructor() {
     this.amqpConnectionProvider = new AmqpConnectionProvider({
-      name: "default",
       options: {
         hostname: process.env.AMQP_HOSTNAME,
         username: process.env.AMQP_USERNAME,
@@ -30,8 +29,8 @@ class Consumer {
     this.amqpConsumer = new AmqpConsumer(
       this.amqpConnectionProvider.getConnection(),
       "vk-gateway",
-      "vk.messages",
-      "vk.messages"
+      "vk.messages.out",
+      "vk.messages.out"
     );
     await this.amqpConsumer.consume<Envelope>(this.consume);
   };

@@ -11,5 +11,9 @@
   "devDependencies": {
     "@types/amqplib": "^0.8.2",
     "@types/node": "^18.8.4"
+  },
+  "scripts": {
+    "build": "rm -rf ./dist && tsc -p .",
+    "start:publisher": "node ./dist/vk-gateway/publisher/index.js"
   }
 }
