@@ -40,5 +40,6 @@ export class AmqpConnectionProvider {
     if (!c) {
       throw new Error("connection not found");
     }
+    return c;
   };
 }
