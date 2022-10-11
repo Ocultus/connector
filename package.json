@@ -1,0 +1,13 @@
+{
+  "name": "connector",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:Ocultus/connector",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/amqplib": "^0.8.2"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.3"
+  }
+}

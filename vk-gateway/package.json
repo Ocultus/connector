@@ -1,0 +1,15 @@
+{
+  "name": "vk-gateway",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:Ocultus/connector",
+  "license": "MIT",
+  "dependencies": {
+    "amqplib": "^0.10.3",
+    "vk-io": "^4.7.0"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.8.2",
+    "@types/node": "^18.8.4"
+  }
+}
