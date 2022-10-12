@@ -1,6 +1,7 @@
 import * as vkio from "vk-io";
 import { Upload, Updates } from "vk-io";
-export class VkGroupProvider {
+import { Envelope } from "../../../types/payload";
+export class VkGroupApiProvider {
   private groups: Map<number, vkio.VK>;
   constructor(private options: Array<{ group: number; token: string }>) {
     this.groups = new Map();
@@ -39,4 +40,13 @@ export class VkGroupProvider {
 
     updates.on("message_new", callback);
   };
+
+  public sendMessage = (group: number,envelope: Envelope) => {
+    const vk = this.getApiByGroup(group);
+    vk.api.messages.send({
+      peer_id: envelope.account,
+      message: envelope.payload.text,
+      random_id: Math.random(),
+    })
+  }
 }

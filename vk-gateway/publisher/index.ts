@@ -1,12 +1,12 @@
 import * as vkio from "vk-io";
 import { AmqpConnectionProvider, AmqpPublisher } from "../../libs/amqp";
 import { Envelope } from "../../types/payload";
-import { VkGroupProvider } from "../provider/vk-group.provider";
+import { VkGroupApiProvider } from "../common/api/vk-group-api.provider";
 
 class Publisher {
   private amqpConnectionProvider!: AmqpConnectionProvider;
   private amqpPublisher!: AmqpPublisher;
-  private vkGroupProvider!: VkGroupProvider;
+  private vkGroupProvider!: VkGroupApiProvider;
   //TODO refactor
   private group!: number;
   constructor() {
@@ -18,7 +18,7 @@ class Publisher {
       },
     });
     const group = Number(process.env.VK_GROUP!);
-    this.vkGroupProvider = new VkGroupProvider([
+    this.vkGroupProvider = new VkGroupApiProvider([
       {
         group,
         token: process.env.VK_TOKEN!,
@@ -46,7 +46,7 @@ class Publisher {
             text: ctx.text,
           },
         },
-        "vk.messages.int"
+        "vk.messages.in"
       );
     }
   };
