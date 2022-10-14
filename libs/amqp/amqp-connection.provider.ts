@@ -1,4 +1,6 @@
 import * as amqp from "amqplib";
+import { sleep } from "../utils/sleep";
+
 export type Options = {
   name?: string;
   options: amqp.Options.Connect;
@@ -10,6 +12,7 @@ export class AmqpConnectionProvider {
   }
 
   public init = async () => {
+    await sleep(20);
     if (Array.isArray(this.options)) {
       Promise.all(
         this.options.map(async (opt) => {
