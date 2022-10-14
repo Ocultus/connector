@@ -1,0 +1,17 @@
+{
+  "folders": [
+    {
+      "name": "_ROOT",
+      "path": "../"
+    },
+    {
+      "name": "vk-gateway",
+      "path": "../vk-gateway"
+    },
+    {
+      "name": "tg-gateway",
+      "path": "../tg-gateway"
+    }
+  ]
+}
+
