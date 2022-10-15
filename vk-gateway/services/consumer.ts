@@ -1,14 +1,14 @@
 import { AmqpConnectionProvider, AmqpConsumer } from "../../libs/amqp";
 import { Envelope } from "../../types/payload";
-import { VkGroupApiProvider } from "../common/api/vk-group-api.provider";
+import { VkGroupApiProvider } from "./vk-group-api.provider";
 
-class Consumer {
+export class Consumer {
   private amqpConnectionProvider!: AmqpConnectionProvider;
   private amqpConsumer!: AmqpConsumer;
-  private vkGroupProvider!: VkGroupApiProvider;
   //TODO refactor
-  private group!: number;
-  constructor() {
+  constructor(
+    private readonly vkGroupProvider: VkGroupApiProvider
+  ) {
     this.amqpConnectionProvider = new AmqpConnectionProvider({
       options: {
         hostname: process.env.AMQP_HOSTNAME,
@@ -16,13 +16,6 @@ class Consumer {
         vhost: "/",
       },
     });
-    const group = Number(process.env.VK_GROUP!);
-    this.vkGroupProvider = new VkGroupApiProvider([
-      {
-        group,
-        token: process.env.VK_TOKEN!,
-      },
-    ]);
   }
   public init = async () => {
     this.amqpConnectionProvider.init();
@@ -36,11 +29,6 @@ class Consumer {
   };
 
   private consume = (envelope: Envelope) => {
-    this.vkGroupProvider.sendMessage(this.group, envelope);
+    this.vkGroupProvider.sendMessage(envelope);
   };
 }
-
-(async () => {
-  const c = new Consumer();
-  await c.init();
-})();

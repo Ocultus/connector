@@ -1,14 +1,12 @@
 import * as vkio from "vk-io";
+import * as dayjs from "dayjs";
 import { AmqpConnectionProvider, AmqpPublisher } from "../../libs/amqp";
 import { Envelope } from "../../types/payload";
-import { VkGroupApiProvider } from "../common/api/vk-group-api.provider";
+import { VkGroupApiProvider } from "./vk-group-api.provider";
 
-class Publisher {
+export class Publisher {
   private amqpConnectionProvider!: AmqpConnectionProvider;
   private amqpPublisher!: AmqpPublisher;
-  private vkGroupProvider!: VkGroupApiProvider;
-  //TODO refactor
-  private group!: number;
   constructor() {
     this.amqpConnectionProvider = new AmqpConnectionProvider({
       options: {
@@ -17,13 +15,6 @@ class Publisher {
         vhost: "/",
       },
     });
-    const group = Number(process.env.VK_GROUP!);
-    this.vkGroupProvider = new VkGroupApiProvider([
-      {
-        group,
-        token: process.env.VK_TOKEN!,
-      },
-    ]);
   }
   public init = async () => {
     this.amqpConnectionProvider.init();
@@ -31,28 +22,24 @@ class Publisher {
       this.amqpConnectionProvider.getConnection(),
       "vk-gateway"
     );
-
-    this.vkGroupProvider.registerLongPoll(this.group, this.handleNewMessage);
   };
 
-  private handleNewMessage = (
+  public handleNewMessage = (
     ctx: vkio.MessageContext<vkio.ContextDefaultState>
   ) => {
     if (ctx.text && ctx.peerId) {
       this.amqpPublisher.publish<Envelope>(
         {
+          type: "incoming",
           account: ctx.peerId,
           payload: {
             text: ctx.text,
           },
+          createdAt: new Date().toISOString(),
+          sentAt: dayjs.unix(ctx.createdAt).toISOString(),
         },
         "vk.messages.in"
       );
     }
   };
 }
-
-(async () => {
-  const publisher = new Publisher();
-  await publisher.init();
-})();
