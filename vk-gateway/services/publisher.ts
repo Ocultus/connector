@@ -1,28 +1,14 @@
 import * as vkio from "vk-io";
 import * as dayjs from "dayjs";
-import { AmqpConnectionProvider, AmqpPublisher } from "../../libs/amqp";
+import * as amqp from "amqplib";
+import { AmqpPublisher } from "../../libs/amqp";
 import { Envelope } from "../../types/payload";
-import { VkGroupApiProvider } from "./vk-group-api.provider";
 
 export class Publisher {
-  private amqpConnectionProvider!: AmqpConnectionProvider;
-  private amqpPublisher!: AmqpPublisher;
-  constructor() {
-    this.amqpConnectionProvider = new AmqpConnectionProvider({
-      options: {
-        hostname: process.env.AMQP_HOSTNAME,
-        username: process.env.AMQP_USERNAME,
-        vhost: "/",
-      },
-    });
+  private amqpPublisher: AmqpPublisher;
+  constructor(private connection: amqp.Connection) {
+    this.amqpPublisher = new AmqpPublisher(this.connection, "vk-gateway");
   }
-  public init = async () => {
-    this.amqpConnectionProvider.init();
-    this.amqpPublisher = new AmqpPublisher(
-      this.amqpConnectionProvider.getConnection(),
-      "vk-gateway"
-    );
-  };
 
   public handleNewMessage = (
     ctx: vkio.MessageContext<vkio.ContextDefaultState>

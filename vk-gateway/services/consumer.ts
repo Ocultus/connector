@@ -1,30 +1,22 @@
-import { AmqpConnectionProvider, AmqpConsumer } from "../../libs/amqp";
+import * as amqp from "amqplib";
+import { AmqpConsumer } from "../../libs/amqp";
 import { Envelope } from "../../types/payload";
 import { VkGroupApiProvider } from "./vk-group-api.provider";
 
 export class Consumer {
-  private amqpConnectionProvider!: AmqpConnectionProvider;
-  private amqpConsumer!: AmqpConsumer;
-  //TODO refactor
+  private amqpConsumer: AmqpConsumer;
   constructor(
-    private readonly vkGroupProvider: VkGroupApiProvider
+    private readonly vkGroupProvider: VkGroupApiProvider,
+    private readonly connection: amqp.Connection
   ) {
-    this.amqpConnectionProvider = new AmqpConnectionProvider({
-      options: {
-        hostname: process.env.AMQP_HOSTNAME,
-        username: process.env.AMQP_USERNAME,
-        vhost: "/",
-      },
-    });
-  }
-  public init = async () => {
-    this.amqpConnectionProvider.init();
     this.amqpConsumer = new AmqpConsumer(
-      this.amqpConnectionProvider.getConnection(),
+      this.connection,
       "vk-gateway",
       "vk.messages.out",
       "vk.messages.out"
     );
+  }
+  public init = async () => {
     await this.amqpConsumer.consume<Envelope>(this.consume);
   };
 
