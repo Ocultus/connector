@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    /* Projects */
+    "outDir": "./dist",
+    "incremental": true,
+    "composite": true,
+    /* Language and Environment */
+    "target": "ESNext",
+    "lib": [
+      "ESNext"
+    ] /* Specify a set of bundled library declaration files that describe the target runtime environment. */,
+    "experimentalDecorators": true,
+    /* Modules */
+    "module": "commonjs",
+    "moduleResolution": "node",
+    /* Emit */
+    "sourceMap": true,
+    /* Interop Constraints */
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    /* Type Checking */
+    "strict": true,
+    "skipLibCheck": true
+  }
+}

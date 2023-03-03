@@ -1,0 +1,145 @@
+version: '3.9'
+volumes:
+  postgres_data:
+  pgadmin:
+  rabbitmq_data:
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    volumes:
+      - 'rabbitmq_data:/data'
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    environment:
+      - RABBITMQ_DEFAULT_USER=${AMQP_USER:-user}
+      - RABBITMQ_DEFAULT_PASS=${AMQP_PASS:-pass}
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    container_name: connector_db
+    image: postgres:11.13-alpine
+    command:
+      - 'postgres'
+      - '-c'
+      - 'max_connections=50'
+      - '-c'
+      - 'shared_buffers=1GB'
+      - '-c'
+      - 'effective_cache_size=4GB'
+      - '-c'
+      - 'work_mem=16MB'
+      - '-c'
+      - 'maintenance_work_mem=512MB'
+      - '-c'
+      - 'random_page_cost=1.1'
+      - '-c'
+      - 'temp_file_limit=10GB'
+      - '-c'
+      - 'log_min_duration_statement=200ms'
+      - '-c'
+      - 'idle_in_transaction_session_timeout=10s'
+      - '-c'
+      - 'lock_timeout=1s'
+      - '-c'
+      - 'statement_timeout=60s'
+      - '-c'
+      - 'shared_preload_libraries=pg_stat_statements'
+      - '-c'
+      - 'pg_stat_statements.max=10000'
+      - '-c'
+      - 'pg_stat_statements.track=all'
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-connector_db}
+      POSTGRES_USER: ${DATABASE_USER:-user}
+      POSTGRES_PASSWORD: ${DATABASE_PASS:-pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${DATABASE_USER:-user} -d ${DATABASE_NAME:-connector_db}',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 4G
+
+  vk-gateway:
+    container_name: vk-gateway
+    depends_on:
+      - rabbitmq
+      - cloud-storage
+    build:
+      context: ./
+      dockerfile: docker/app.dockerfile
+    environment:
+      - AMQP_HOSTNAME=${AMQP_HOST:-rabbitmq}
+      - AMQP_USERNAME=${AMQP_USER:-user}
+      - AMQP_PASS=${AMQP_USER:-pass}
+      - ENDPOINTS_CLOUD_STORAGE_URL=${ENDPOINTS_CLOUD_STORAGE_URL:-cloud-storage/upload-object}
+    command: 'yarn run:vk-gateway'
+
+  tg-gateway:
+    container_name: tg-gateway
+    depends_on:
+      - rabbitmq
+      - cloud-storage
+    build:
+      context: ./
+      dockerfile: docker/app.dockerfile
+    environment:
+      - AMQP_HOSTNAME=${AMQP_HOST:-rabbitmq}
+      - AMQP_USERNAME=${AMQP_USER:-user}
+      - AMQP_PASS=${AMQP_USER:-pass}
+      - ENDPOINTS_CLOUD_STORAGE_URL=${ENDPOINTS_CLOUD_STORAGE_URL:-cloud-storage/upload-object}
+    command: 'yarn run:tg-gateway'
+
+  cloud-storage: 
+    container_name: cloud-storage
+    build:
+      context: ./
+      dockerfile: docker/app.dockerfile
+    environment: 
+      - CLOUD_STORAGE_KEY=${CLOUD_STORAGE_KEY:-key}
+      - CLOUD_STORAGE_PORT=3001
+      - CLOUD_STORAGE_KEY_ID=${CLOUD_STORAGE_KEY_ID:-key_id}
+      - CLOUD_STORAGE_BUCKET=${CLOUD_STORAGE_BUCKET:-bucket}
+      - CLOUD_STORAGE_REGION=${CLOUD_STORAGE_REGION:-eu-west-1}
+      - CLOUD_STORAGE_ENDPOINT_URL=${CLOUD_STORAGE_ENDPOINT_URL:-https://storage.yandexcloud.net}
+    command: 'yarn run:cloud-storage'
+    ports: 
+      - '3001:3001'
+  core:
+    container_name: core
+    depends_on:
+      - postgres
+      - rabbitmq
+    build:
+      context: ./
+      dockerfile: docker/app.dockerfile
+    environment:
+      - AMQP_HOSTNAME=${AMQP_HOST:-rabbitmq}
+      - AMQP_USERNAME=${AMQP_USER:-user}
+      - AMQP_PASS=${AMQP_USER:-pass}
+      - PG_PASS=${PG_PASS:-pass}
+      - PG_HOST=${PG_HOST:-connector_db}
+      - PG_USER=${PG_USER:-user}
+      - PG_PORT=${PG_PORT:-5432}
+      - PG_DB=${PG_DB:-connector_db}
+      - ENDPOINT_CLOUD_STORAGE=${ENDPOINT_CLOUD_STORAGE:-cloud-storage/upload-object}
+    command: 'yarn run:core'
