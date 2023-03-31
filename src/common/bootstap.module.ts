@@ -1,15 +1,25 @@
-import { Client } from 'pg';
+import {createPool, DatabasePool, stringifyDsn} from 'slonik';
+import {createFieldNameTransformationInterceptor} from 'slonik-interceptor-field-name-transformation';
 import {AmqpConnectionProviderModule} from './amqp';
 import {DatabaseConfig, RabbitMqConfig} from './config/config.module';
 
 export class Bootstrap {
-	private pgClient?: Client;
+	private pgClient?: DatabasePool;
 	private AmqpConnectionProviderModule?: AmqpConnectionProviderModule;
 
 	public initDatabase = async (config: DatabaseConfig) => {
 		if (!this.pgClient) {
-			this.pgClient = new Client(config);
-			await this.pgClient.connect();
+			const interceptors = [
+				createFieldNameTransformationInterceptor({
+					format: 'CAMEL_CASE',
+				}),
+			];
+			const uri = stringifyDsn(config);
+
+			this.pgClient = await createPool(uri, {
+				interceptors,
+			});
+
 			return this.pgClient;
 		}
 
