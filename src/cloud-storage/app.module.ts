@@ -1,9 +1,8 @@
 import {configModule} from '../common/config/config.module';
 import {CloudStorageController} from './cloud-storage.controller';
 import Fastify from 'fastify';
-import {TypeBoxTypeProvider} from '@fastify/type-provider-typebox';
 import {
-	UploadFileRequestBody,
+	UploadFile,
 	UploadFileResponseBody,
 } from './cloud-storage.type';
 
@@ -21,9 +20,9 @@ export class ApplicationModule {
 
 		const fastify = Fastify({
 			logger: true,
-		}).withTypeProvider<TypeBoxTypeProvider>();
+		})
 
-		fastify.post<{Body: UploadFileRequestBody; Reply: UploadFileResponseBody}>(
+		fastify.post<{Body: UploadFile; Reply: UploadFileResponseBody}>(
 			'/upload-object',
 			async (request, reply) => {
 				const {buffer, mimetype, route, url} = request.body;

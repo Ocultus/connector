@@ -1,5 +1,3 @@
-import {Static, Type} from '@sinclair/typebox';
-
 export type CloudStorageControllerOptions = {
 	accessKeyId: string;
 	secretAccessKey: string;
@@ -8,17 +6,14 @@ export type CloudStorageControllerOptions = {
 	bucket: string;
 };
 
-export const UploadFile = Type.Object({
-	buffer: Type.Optional(Type.Uint8Array()),
-	url: Type.Optional(Type.String()),
-	mimetype: Type.Optional(Type.String()),
-	route: Type.String(),
-});
+export type UploadFile = {
+	buffer?: Uint8Array;
+	url?: string;
+	mimetype?: string;
+	route: string;
+}
 
-export type UploadFileRequestBody = Static<typeof UploadFile>;
+export type UploadFileResponseBody = {
+	url: string
+}
 
-export const UploadedFile = Type.Object({
-	url: Type.String(),
-});
-
-export type UploadFileResponseBody = Static<typeof UploadedFile>;
