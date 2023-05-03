@@ -14,29 +14,44 @@ import {
 
 import {
 	Attachment as InternalAttachment,
+	AudioAttachment as InternalAudioAttachment,
 	EventType,
+	DocumentAttachment as InternalDocumentAttachment,
 } from '../common/types/payload';
 import {AmqpConsumerModule, AmqpPublisherModule} from '../common/amqp';
 import {Envelope} from '../common/types/payload';
 import {randomUUID} from 'crypto';
 import {EndpointsConfig} from '../common/config/config.module';
-import {Post} from '../common/http/request';
+import {
+	CreateTRPCProxyClient,
+	createTRPCProxyClient,
+	httpBatchLink,
+} from '@trpc/client';
+import {AppRouter as CloudStorageRouter} from '../cloud-storage/trpc/router';
 
 type MessageCtx = MessageContext<ContextDefaultState>;
 
 export class VkGatewayController {
 	private vkApi: VK;
+	private cloudStorageClient: CreateTRPCProxyClient<CloudStorageRouter>;
 
 	constructor(
 		private readonly group: number,
 		private readonly token: string,
 		private readonly consumer: AmqpConsumerModule,
 		private readonly publisher: AmqpPublisherModule,
-		private readonly endpoints: EndpointsConfig,
+		readonly endpoints: EndpointsConfig,
 	) {
 		this.vkApi = new VK({
 			token: this.token,
 			pollingGroupId: this.group,
+		});
+		this.cloudStorageClient = createTRPCProxyClient<CloudStorageRouter>({
+			links: [
+				httpBatchLink({
+					url: endpoints.cloudStorageUrl,
+				}),
+			],
 		});
 	}
 
@@ -57,20 +72,91 @@ export class VkGatewayController {
 		await this.consumer.consume<Envelope>(this.sendMessage);
 	};
 
-	private sendMessage = (envelope: Envelope) => {
+	public pause = async () => {
+		await this.vkApi.updates.stop();
+	};
+
+	public enable = async () => {
+		await this.vkApi.updates.start();
+	};
+
+	private sendMessage = async (envelope: Envelope) => {
+		const {attachments: envelopeAttachments} = envelope.payload;
+		let attachment: AudioAttachment | PhotoAttachment | DocumentAttachment | undefined;
+		if (envelopeAttachments.length) {
+			const documentAttachmnts: ({ url: string; } & InternalDocumentAttachment)[]  = [];
+			const photoUrls: string[] = [];
+			const audioAttachments: ({
+				url: string;
+			} & InternalAudioAttachment)[] = [];
+			let attachment;
+
+			envelopeAttachments.forEach(value => {
+				if (value.type === 'document') {
+					documentAttachmnts.push(value);
+				} else if (value.type === 'image') {
+					photoUrls.push(value.url)
+				} else if (value.type === 'audio') {
+					audioAttachments.push(value)
+				}
+			});
+
+			if (documentAttachmnts.length) {
+				attachment = await this.vkApi.upload.document({
+					source: {
+						values: documentAttachmnts.map(value => {
+							return {
+								value: value.url,
+								filename: value.title,
+							}
+						})
+					}
+				});
+			}
+
+			if (photoUrls.length) {
+				attachment = await this.vkApi.upload.messagePhoto({
+					source: {
+						values: photoUrls.map(value => {
+							return {
+								value,
+							}
+						})
+					}
+				});
+			}
+
+			if (audioAttachments.length) {
+				attachment = await this.vkApi.upload.audio({
+					source: {
+						values: audioAttachments.map(value => {
+							return {
+								filename: value.title,
+								value: value.url,
+							}
+						})
+					}
+				});
+			}
+
+		}
+
 		this.vkApi.api.messages.send({
 			peer_id: envelope.chatId,
 			message: envelope.payload.text,
 			random_id: Math.random(),
+			attachment: attachment,
 		});
 	};
 
 	private handleNewMessage = async (ctx: MessageCtx) => {
 		const messages = await this.handleMessage(ctx, 'new_message');
+		this.publisher.publish(messages, '')
 	};
 
 	private handleEditMessage = async (ctx: MessageCtx) => {
 		const messages = await this.handleMessage(ctx, 'edit_message');
+		this.publisher.publish(messages, '')
 	};
 
 	private handleMessage = async (
@@ -165,9 +251,9 @@ export class VkGatewayController {
 			}
 
 			const route = ['vk', chatId, userId, attachment.type].join('/');
-			const {url} = await Post<{url: string}>(this.endpoints.cloudStorageUrl, {
-				url: attachment.url,
+			const url = await this.cloudStorageClient.object.upload.mutate({
 				route,
+				url: attachment.url,
 			});
 
 			return {
