@@ -28,6 +28,7 @@ import {
 	httpBatchLink,
 } from '@trpc/client';
 import {AppRouter as CloudStorageRouter} from '../cloud-storage/trpc/router';
+import {Report, ReportStatus} from '../common/types/report.type';
 
 type MessageCtx = MessageContext<ContextDefaultState>;
 
@@ -36,10 +37,12 @@ export class VkGatewayController {
 	private cloudStorageClient: CreateTRPCProxyClient<CloudStorageRouter>;
 
 	constructor(
+		private readonly id: number,
 		private readonly group: number,
 		private readonly token: string,
 		private readonly consumer: AmqpConsumerModule,
 		private readonly publisher: AmqpPublisherModule,
+		private readonly reportPublisher: AmqpPublisherModule,
 		readonly endpoints: EndpointsConfig,
 	) {
 		this.vkApi = new VK({
@@ -53,6 +56,10 @@ export class VkGatewayController {
 				}),
 			],
 		});
+	}
+
+	public getMessageQueueName = () => {
+		return 'vk.in.group' + this.id;
 	}
 
 	public init = async () => {
@@ -81,82 +88,108 @@ export class VkGatewayController {
 	};
 
 	private sendMessage = async (envelope: Envelope) => {
-		const {attachments: envelopeAttachments} = envelope.payload;
-		let attachment: AudioAttachment | PhotoAttachment | DocumentAttachment | undefined;
-		if (envelopeAttachments.length) {
-			const documentAttachmnts: ({ url: string; } & InternalDocumentAttachment)[]  = [];
-			const photoUrls: string[] = [];
-			const audioAttachments: ({
-				url: string;
-			} & InternalAudioAttachment)[] = [];
-			let attachment;
-
-			envelopeAttachments.forEach(value => {
-				if (value.type === 'document') {
-					documentAttachmnts.push(value);
-				} else if (value.type === 'image') {
-					photoUrls.push(value.url)
-				} else if (value.type === 'audio') {
-					audioAttachments.push(value)
-				}
-			});
-
-			if (documentAttachmnts.length) {
-				attachment = await this.vkApi.upload.document({
-					source: {
-						values: documentAttachmnts.map(value => {
-							return {
-								value: value.url,
-								filename: value.title,
-							}
-						})
-					}
-				});
-			}
-
-			if (photoUrls.length) {
-				attachment = await this.vkApi.upload.messagePhoto({
-					source: {
-						values: photoUrls.map(value => {
-							return {
-								value,
-							}
-						})
-					}
-				});
-			}
-
-			if (audioAttachments.length) {
-				attachment = await this.vkApi.upload.audio({
-					source: {
-						values: audioAttachments.map(value => {
-							return {
-								filename: value.title,
-								value: value.url,
-							}
-						})
-					}
-				});
-			}
-
+		if (envelope.type !== 'outgoing') {
+			return;
 		}
 
-		this.vkApi.api.messages.send({
-			peer_id: envelope.chatId,
-			message: envelope.payload.text,
-			random_id: Math.random(),
-			attachment: attachment,
-		});
+		try {
+			const {attachments: envelopeAttachments} = envelope.payload;
+			let attachment:
+				| AudioAttachment
+				| PhotoAttachment
+				| DocumentAttachment
+				| undefined;
+			if (envelopeAttachments.length) {
+				const documentAttachmnts: ({
+					url: string;
+				} & InternalDocumentAttachment)[] = [];
+				const photoUrls: string[] = [];
+				const audioAttachments: ({
+					url: string;
+				} & InternalAudioAttachment)[] = [];
+				let attachment;
+
+				envelopeAttachments.forEach(value => {
+					if (value.type === 'document') {
+						documentAttachmnts.push(value);
+					} else if (value.type === 'image') {
+						photoUrls.push(value.url);
+					} else if (value.type === 'audio') {
+						audioAttachments.push(value);
+					}
+				});
+
+				if (documentAttachmnts.length) {
+					attachment = await this.vkApi.upload.document({
+						source: {
+							values: documentAttachmnts.map(value => {
+								return {
+									value: value.url,
+									filename: value.title,
+								};
+							}),
+						},
+					});
+				}
+
+				if (photoUrls.length) {
+					attachment = await this.vkApi.upload.messagePhoto({
+						source: {
+							values: photoUrls.map(value => {
+								return {
+									value,
+								};
+							}),
+						},
+					});
+				}
+
+				if (audioAttachments.length) {
+					attachment = await this.vkApi.upload.audio({
+						source: {
+							values: audioAttachments.map(value => {
+								return {
+									filename: value.title,
+									value: value.url,
+								};
+							}),
+						},
+					});
+				}
+			}
+
+			await this.vkApi.api.messages.send({
+				peer_id: envelope.chatId,
+				message: envelope.payload.text,
+				random_id: Math.random(),
+				attachment: attachment,
+			});
+			this.reportPublisher.publish<Report>(
+				{
+					reportKey: envelope.reportKey,
+					status: ReportStatus.Acknowledged,
+				},
+				'',
+			);
+		} catch (err) {
+			this.reportPublisher.publish<Report>(
+				{
+					reportKey: envelope.reportKey,
+					status: ReportStatus.Failed,
+				},
+				'',
+			);
+		}
 	};
 
 	private handleNewMessage = async (ctx: MessageCtx) => {
 		const messages = await this.handleMessage(ctx, 'new_message');
-		this.publisher.publish(messages, '')
+		this.publisher.publish(messages, this.getMessageQueueName());
 	};
 
 	private handleEditMessage = async (ctx: MessageCtx) => {
 		const messages = await this.handleMessage(ctx, 'edit_message');
-		this.publisher.publish(messages, '')
+		this.publisher.publish(messages, this.getMessageQueueName());
 	};
 
 	private handleMessage = async (
