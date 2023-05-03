@@ -13,11 +13,13 @@ import {
 	TgAttachment,
 	TgMessage,
 } from './tg-gateway.type';
-import {Post} from '../common/http/request';
 import {InputMediaDocument} from 'telegraf/typings/core/types/typegram';
+import { CreateTRPCProxyClient, createTRPCProxyClient, httpBatchLink } from '@trpc/client';
+import {AppRouter as CloudStorageRouter} from '../cloud-storage/trpc/router';
 
 export class TgGatewayController {
 	private telegaf: Telegraf;
+	private cloudStorageClient: CreateTRPCProxyClient<CloudStorageRouter>;
 
 	constructor(
 		readonly id: number,
@@ -28,6 +30,13 @@ export class TgGatewayController {
 		private readonly endpoints: EndpointsConfig,
 	) {
 		this.telegaf = new Telegraf(token);
+		this.cloudStorageClient = createTRPCProxyClient<CloudStorageRouter>({
+			links: [
+				httpBatchLink({
+					url: endpoints.cloudStorageUrl,
+				}),
+			],
+		});
 	}
 
 	public init = async () => {
@@ -244,35 +253,31 @@ export class TgGatewayController {
 		}
 
 		const promises = files.map(async file => {
-			const fileUrl = await this.fileIdToUrl(file.id);
+			const fileUrl = (await this.fileIdToUrl(file.id)).toString();
 
-			const fileRouteOnCloud = ['tg', chatId, userId, file.type].join('/');
-			const uploadedFileResponse = await Post<{url: string}>(
-				this.endpoints.cloudStorageUrl,
-				{
-					url: fileUrl,
-					route: fileRouteOnCloud,
-				},
-			);
-			const uploadedFileUrl = uploadedFileResponse.url;
+			const route = ['tg', chatId, userId, file.type].join('/');
+			const url = await this.cloudStorageClient.object.upload.mutate({
+				route,
+				url: fileUrl,
+			});
 
 			switch (file.type) {
 				case 'document':
 					return {
 						type: file.type,
-						url: uploadedFileUrl,
+						url,
 						title: file.title ?? '',
 						extension: file.mime_type ?? 'txt',
 					};
 				case 'image':
 					return {
 						type: file.type,
-						url: uploadedFileUrl,
+						url,
 					};
 				case 'audio' || 'voice':
 					return {
 						type: file.type,
-						url: uploadedFileUrl,
+						url,
 						title: file.title ?? '',
 					};
 				default:
