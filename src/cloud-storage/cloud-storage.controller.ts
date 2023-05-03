@@ -30,7 +30,7 @@ export class CloudStorageController {
 	public async uploadObject(
 		file: UploadFileResponse,
 		route: string,
-	): Promise<string> {
+	): Promise<string | undefined> {
 		if (typeof route !== 'string') {
 			throw new Error('route (2nd argument) is not defined');
 		}
@@ -43,7 +43,7 @@ export class CloudStorageController {
 			};
 		}
 
-		const fileAttributes = await getFileAttributes(file);
+		const fileAttributes = getFileAttributes(file);
 		const {fileBody, fileExt} = fileAttributes;
 		let {fileUploadName} = fileAttributes;
 
@@ -85,8 +85,6 @@ export class CloudStorageController {
 				message: (error as Error).message,
 			});
 		}
-
-		return '';
 	}
 
 	public async deleteObject(key: string): Promise<void> {
