@@ -14,14 +14,17 @@ import {
 	TgMessage,
 } from './tg-gateway.type';
 import {Post} from '../common/http/request';
+import {InputMediaDocument} from 'telegraf/typings/core/types/typegram';
 
 export class TgGatewayController {
 	private telegaf: Telegraf;
 
 	constructor(
+		readonly id: number,
 		readonly token: string,
 		private readonly consumer: AmqpConsumerModule,
 		private readonly publisher: AmqpPublisherModule,
+		private readonly reportPublisher: AmqpPublisherModule,
 		private readonly endpoints: EndpointsConfig,
 	) {
 		this.telegaf = new Telegraf(token);
@@ -40,10 +43,86 @@ export class TgGatewayController {
 		await this.consumer.consume<Envelope>(this.sendMessage);
 	};
 
-	private sendMessage = async (envelope: Envelope) => {};
+	public getMessageQueueName = () => {
+		return 'tg.in.bot' + this.id;
+	};
+
+	public pause = async () => {
+		this.telegaf.stop();
+	};
+
+	public enable = async () => {
+		this.telegaf.launch();
+	};
+
+	private sendMessage = async (envelope: Envelope) => {
+		if (envelope.type !== 'outgoing') {
+			return;
+		}
+
+		const attachmentsRaw = envelope.payload.attachments;
+		if (attachmentsRaw.length === 1) {
+			const attachment = attachmentsRaw[0];
+			if (attachment.type === 'audio' && this.telegaf.context.sendAudio) {
+				const audio = {
+					filename: attachment.title,
+					url: attachment.url,
+				};
+				await this.telegaf.context.sendAudio(audio, {
+					caption: envelope.payload.text,
+				});
+			} else if (
+				attachment.type === 'document' &&
+				this.telegaf.context.sendDocument
+			) {
+				const document = {
+					filename: attachment.title,
+					url: attachment.url,
+				};
+
+				await this.telegaf.context.sendDocument(document, {
+					caption: envelope.payload.text,
+				});
+			} else if (
+				attachment.type === 'image' &&
+				this.telegaf.context.sendPhoto
+			) {
+				await this.telegaf.context.sendPhoto(attachment.url, {
+					caption: envelope.payload.text,
+				});
+			}
+		} else if (attachmentsRaw.length && this.telegaf.context.sendMediaGroup) {
+			const attachments = attachmentsRaw.map(attachment => {
+				let document: InputMediaDocument = {
+					type: 'document',
+					media: {
+						url: attachment.url,
+					},
+				};
+
+				if (attachment.type === 'audio' || attachment.type === 'document') {
+					document.media = {
+						url: attachment.url,
+						filename: attachment.title,
+					};
+				}
+
+				return document;
+			});
+
+			if (envelope.payload.text) {
+				attachments[0].caption = envelope.payload.text;
+			}
+
+			await this.telegaf.context.sendMediaGroup(attachments);
+		} else if (envelope.payload.text && this.telegaf.context.sendMessage) {
+			await this.telegaf.context.sendMessage(envelope.payload.text);
+		}
+	};
 
 	private handleNewMessage = async (ctx: NewMessageCtx) => {
 		const messages = await this.handleMessage(ctx.message, 'new_message');
+		this.publisher.publish(messages, this.getMessageQueueName());
 	};
 
 	private handleEditMessage = async (ctx: EditMessageCtx) => {
@@ -51,6 +130,7 @@ export class TgGatewayController {
 			ctx.update.edited_message,
 			'edit_message',
 		);
+		this.publisher.publish(messages, this.getMessageQueueName());
 	};
 
 	private fileIdToUrl = async (fileId: string): Promise<URL> => {
