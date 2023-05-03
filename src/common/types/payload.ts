@@ -38,5 +38,8 @@ export type Envelope = {
 	  }
 	| {
 			type: 'outgoing';
+			reportKey: string;
 	  }
 );
+
+
