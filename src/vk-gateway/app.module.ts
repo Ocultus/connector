@@ -5,13 +5,7 @@ import {configModule} from '../common/config/config.module';
 import {AppRouter as CoreRouter} from '../core/trpc/_app';
 
 import {VkGatewayController} from './vk-gateway.controller';
-
-type GetawayAction = 'pause' | 'resume' | 'stop';
-
-type GatewayActionMessage = {
-	id: number;
-	action: GetawayAction;
-};
+import { GatewayActionMessage } from '../common/types/common.type';
 
 export class ApplicationModule {
 	private bootsrap: Bootstrap;
@@ -21,11 +15,14 @@ export class ApplicationModule {
 
 	public init = async () => {
 		const gatewayExchange = 'core.messages';
+		const gatewayActionsExchange = 'core.actions';
+		const coreReportExchange = 'core.reports';
+
 		const amqpConfig = configModule.getAmqpConfig();
 		const amqpConnection = await this.bootsrap.initAmqpConnection(amqpConfig);
 		const amqpFactory = new AmqpFactoryModule(amqpConnection);
-		const endpoints = configModule.getEndpointsConfig();
 
+		const endpoints = configModule.getEndpointsConfig();
 		const coreClient = createTRPCProxyClient<CoreRouter>({
 			links: [
 				httpBatchLink({
@@ -35,13 +32,17 @@ export class ApplicationModule {
 		});
 
 		const vkGatewayActionsConsumer = await amqpFactory.makeConsumer(
-			gatewayExchange,
+			gatewayActionsExchange,
 			'vk.actions',
 			'vk.actions',
 		);
 
 		const coreMessagePublisher = await amqpFactory.makePublisher(
 			gatewayExchange,
+		);
+
+		const coreReportMessagePublisher = await amqpFactory.makePublisher(
+			coreReportExchange,
 		);
 
 		const gatewayToController = new Map<number, VkGatewayController>();
@@ -53,7 +54,7 @@ export class ApplicationModule {
 					id,
 					credentials: {token, group},
 				} = vkGateway;
-				const queueName = 'vk.group.' + group;
+				const queueName = 'vk.out.id' + id;
 
 				const gatewayConsumer = await amqpFactory.makeConsumer(
 					gatewayExchange,
@@ -61,10 +62,12 @@ export class ApplicationModule {
 					queueName,
 				);
 				const gatewayController = new VkGatewayController(
+					id,
 					group,
 					token,
 					gatewayConsumer,
 					coreMessagePublisher,
+					coreReportMessagePublisher,
 					endpoints,
 				);
 				gatewayToController.set(id, gatewayController);
