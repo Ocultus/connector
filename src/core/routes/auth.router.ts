@@ -1,11 +1,11 @@
 import Jwt from 'jsonwebtoken';
 import {configModule} from '../../common/config/config.module';
-import {t} from './gateway.router';
 import * as bcrypt from 'bcrypt';
 import {TRPCError} from '@trpc/server';
 import {sql} from '../types/db.type';
 import {SignInCredentials, SignUpCredentials} from '../types/auth.type';
 import {z} from 'zod';
+import {t} from '../trpc/router';
 
 export const AuthRouter = t.router({
 	signIn: t.procedure

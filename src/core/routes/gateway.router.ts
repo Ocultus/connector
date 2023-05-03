@@ -1,10 +1,7 @@
-import {initTRPC} from '@trpc/server';
 import {sql} from '../types/db.type';
 import {CredentialType, GatewayEntityRow} from '../types/gateway.type';
-import {Context} from '../trpc/context';
 import {protectedProcedure} from '../trpc/middleware';
-
-export const t = initTRPC.context<Context>().create();
+import { t } from '../trpc/router';
 
 export const GatewayRouter = t.router({
 	findByType: protectedProcedure

@@ -27,6 +27,7 @@ export type CloudStorageConfig = {
 
 export type EndpointsConfig = {
 	cloudStorageUrl: string;
+	coreUrl: string;
 };
 
 export type AuthConfig = {
@@ -69,6 +70,7 @@ export const getCloudStorageConfig: ConfigGetter<CloudStorageConfig> = () => ({
 });
 
 export const getEndpointsConfig: ConfigGetter<EndpointsConfig> = () => ({
+	coreUrl: getValueFromProcessEnv('ENDPOINTS_CORE_URL'),
 	cloudStorageUrl: getValueFromProcessEnv('ENDPOINTS_CLOUD_STORAGE_URL'),
 });
 

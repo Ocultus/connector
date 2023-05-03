@@ -1,7 +1,5 @@
-import { initTRPC, TRPCError } from "@trpc/server";
-import { Context } from "./context";
-
-export const t = initTRPC.context<Context>().create();
+import { TRPCError } from "@trpc/server";
+import { t } from "./router";
 
 const isAuthed = t.middleware(({ next, ctx }) => {
   if (!ctx.user) {
