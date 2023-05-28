@@ -91,7 +91,8 @@ services:
       - AMQP_HOSTNAME=${AMQP_HOST:-rabbitmq}
       - AMQP_USERNAME=${AMQP_USER:-user}
       - AMQP_PASS=${AMQP_USER:-pass}
-      - ENDPOINTS_CLOUD_STORAGE_URL=${ENDPOINTS_CLOUD_STORAGE_URL:-cloud-storage/upload-object}
+      - ENDPOINTS_CLOUD_STORAGE_URL=${ENDPOINTS_CLOUD_STORAGE_URL:-cloud-storage/api/trpc}
+      - ENDPOINTS_CORE_URL=${ENDPOINTS_CORE_URL:-core/api/trpc}
     command: 'yarn run:vk-gateway'
 
   tg-gateway:
@@ -107,6 +108,7 @@ services:
       - AMQP_USERNAME=${AMQP_USER:-user}
       - AMQP_PASS=${AMQP_USER:-pass}
       - ENDPOINTS_CLOUD_STORAGE_URL=${ENDPOINTS_CLOUD_STORAGE_URL:-cloud-storage/upload-object}
+      - ENDPOINTS_CORE_URL=${ENDPOINTS_CORE_URL:-core/api/trpc}
     command: 'yarn run:tg-gateway'
 
   cloud-storage: 
@@ -116,7 +118,7 @@ services:
       dockerfile: docker/app.dockerfile
     environment: 
       - CLOUD_STORAGE_KEY=${CLOUD_STORAGE_KEY:-key}
-      - CLOUD_STORAGE_PORT=3001
+      - CLOUD_STORAGE_PORT=${CLOUD_STORAGE_PORT:-3002}
       - CLOUD_STORAGE_KEY_ID=${CLOUD_STORAGE_KEY_ID:-key_id}
       - CLOUD_STORAGE_BUCKET=${CLOUD_STORAGE_BUCKET:-bucket}
       - CLOUD_STORAGE_REGION=${CLOUD_STORAGE_REGION:-eu-west-1}
@@ -124,6 +126,7 @@ services:
     command: 'yarn run:cloud-storage'
     ports: 
       - '3001:3001'
+  
   core:
     container_name: core
     depends_on:
@@ -143,3 +146,5 @@ services:
       - PG_DB=${PG_DB:-connector_db}
       - ENDPOINT_CLOUD_STORAGE=${ENDPOINT_CLOUD_STORAGE:-cloud-storage/upload-object}
     command: 'yarn run:core'
+    ports: 
+      - '3000:3000'
