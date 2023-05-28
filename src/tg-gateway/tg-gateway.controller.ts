@@ -26,8 +26,7 @@ export class TgGatewayController {
 		readonly token: string,
 		private readonly consumer: AmqpConsumerModule,
 		private readonly publisher: AmqpPublisherModule,
-		private readonly reportPublisher: AmqpPublisherModule,
-		private readonly endpoints: EndpointsConfig,
+		readonly endpoints: EndpointsConfig,
 	) {
 		this.telegaf = new Telegraf(token);
 		this.cloudStorageClient = createTRPCProxyClient<CloudStorageRouter>({
@@ -169,10 +168,12 @@ export class TgGatewayController {
 			id: messageId,
 			externalMessageId: ctx.message_id,
 			eventType,
+			getawayId: this.id,
 			parentMessageId: parentMessageId,
 			type: 'incoming',
 			sentAt: new Date(ctx.date).toISOString(),
 			chatId: this.telegaf.botInfo!.id,
+			name: ctx.from.first_name + ctx.from.last_name,
 			payload: {
 				text: ctx.text ?? ctx.caption ?? undefined,
 				attachments: [],
@@ -253,12 +254,12 @@ export class TgGatewayController {
 		}
 
 		const promises = files.map(async file => {
-			const fileUrl = (await this.fileIdToUrl(file.id)).toString();
+			const fileUrl = await this.fileIdToUrl(file.id);
 
 			const route = ['tg', chatId, userId, file.type].join('/');
 			const url = await this.cloudStorageClient.object.upload.mutate({
 				route,
-				url: fileUrl,
+				url: fileUrl.toString(),
 			});
 
 			switch (file.type) {

@@ -41,14 +41,10 @@ export class ApplicationModule {
 			gatewayExchange,
 		);
 
-		const coreReportMessagePublisher = await amqpFactory.makePublisher(
-			coreReportExchange,
-		);
-
 		const gatewayToController = new Map<number, TgGatewayController>();
 		const tgGateways = await coreClient.gateway.findByType.mutate({type: 'tg'});
 
-		const vkGatewayInitPromises = tgGateways.map(async tgGateway => {
+		const tgGatewayInitPromises = tgGateways.map(async tgGateway => {
 			if (tgGateway.type === 'tg') {
 				const {
 					id,
@@ -66,7 +62,6 @@ export class ApplicationModule {
 					token,
 					gatewayConsumer,
 					coreMessagePublisher,
-					coreReportMessagePublisher,
 					endpoints,
 				);
 				gatewayToController.set(id, gatewayController);
@@ -74,10 +69,13 @@ export class ApplicationModule {
 			}
 		});
 
-		await Promise.all(vkGatewayInitPromises);
+		await Promise.all(tgGatewayInitPromises);
 
 		tgGatewayActionsConsumer.consume<GatewayActionMessage>(data => {
 			const {id, action} = data;
+			if (action === 'create') {
+				
+			}
 			const controller = gatewayToController.get(id);
 			if (controller) {
 				switch (action) {
