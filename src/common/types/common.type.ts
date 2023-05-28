@@ -1,8 +1,20 @@
 export type Promisify<T> = T | Promise<T>;
 
-export type GetawayAction = 'pause' | 'resume' | 'stop';
+export type GetawayExistAction = 'pause' | 'resume' | 'stop';
+
+type GetawayCreateAction = {
+	action: 'create';
+	credentials: {
+		token: string;
+		group: number;
+	};
+};
 
 export type GatewayActionMessage = {
 	id: number;
-	action: GetawayAction;
-};
+} & (
+	| {
+			action: GetawayExistAction;
+	  }
+	| GetawayCreateAction
+);

@@ -1,12 +1,12 @@
 import {BaseEntityRow} from './base.type';
 import {z} from 'zod';
 
-export const CredentialType = z.object({
-	type: z.enum(['vk', 'tg'])
-})
+export const CredentialTypeRow = z.enum(['vk', 'tg']);
+
+export type CredentialType = z.infer<typeof CredentialTypeRow>;
 
 const VkCredentialsRow = z.object({
-	type: z.enum(['vk']),
+	type: z.literal(CredentialTypeRow.Values.vk),
 	credentials: z.object({
 		token: z.string(),
 		group: z.number(),
@@ -14,13 +14,13 @@ const VkCredentialsRow = z.object({
 });
 
 const TgCredentialsRow = z.object({
-	type: z.enum(['tg']),
+	type: z.literal(CredentialTypeRow.Values.tg),
 	credentials: z.object({
 		token: z.string(),
 	}),
 });
 
-const GatewayCredentialsRow = z.union([TgCredentialsRow, VkCredentialsRow]);
+export const GatewayCredentialsRow = z.union([TgCredentialsRow, VkCredentialsRow]);
 
 export type GatewayCredentials = z.infer<typeof GatewayCredentialsRow>;
 

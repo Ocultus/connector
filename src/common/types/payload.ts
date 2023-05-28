@@ -27,6 +27,8 @@ export type EventType = 'new_message' | 'edit_message';
 export type Envelope = {
 	id: string;
 	chatId: number;
+	name: string;
+	getawayId: number;
 	payload: MessagePayload;
 } & (
 	| {
