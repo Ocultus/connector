@@ -28,7 +28,6 @@ import {
 	httpBatchLink,
 } from '@trpc/client';
 import {AppRouter as CloudStorageRouter} from '../cloud-storage/trpc/router';
-import {Report, ReportStatus} from '../common/types/report.type';
 
 type MessageCtx = MessageContext<ContextDefaultState>;
 
@@ -59,8 +58,8 @@ export class VkGatewayController {
 	}
 
 	public getMessageQueueName = () => {
-		return 'vk.in.group' + this.id;
-	}
+		return 'core.messages.gateway.' + this.id;
+	};
 
 	public init = async () => {
 		const upload = new Upload({
@@ -164,21 +163,9 @@ export class VkGatewayController {
 				random_id: Math.random(),
 				attachment: attachment,
 			});
-			this.reportPublisher.publish<Report>(
-				{
-					reportKey: envelope.reportKey,
-					status: ReportStatus.Acknowledged,
-				},
-				'',
-			);
 		} catch (err) {
-			this.reportPublisher.publish<Report>(
-				{
-					reportKey: envelope.reportKey,
-					status: ReportStatus.Failed,
-				},
-				'',
-			);
+			//TODO
+			throw Error()
 		}
 	};
 
@@ -207,15 +194,26 @@ export class VkGatewayController {
 			return [];
 		}
 
+		const client = await this.vkApi.api.users.get({
+			user_ids: [ctx.peerId],
+		});
+
+		if (!client){
+			//TODO
+			throw new Error()
+		}
+
 		const messageId = randomUUID();
 		let envelope: Envelope = {
 			id: messageId,
 			externalMessageId: id,
+			getawayId: id,
 			eventType,
 			parentMessageId: parentMessageId,
 			type: 'incoming',
 			sentAt: new Date(createdAt).toISOString(),
 			chatId: $groupId,
+			name: client[0].first_name + client[0].last_name,
 			payload: {
 				text: text ?? undefined,
 				attachments: [],

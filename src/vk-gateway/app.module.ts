@@ -5,7 +5,7 @@ import {configModule} from '../common/config/config.module';
 import {AppRouter as CoreRouter} from '../core/trpc/_app';
 
 import {VkGatewayController} from './vk-gateway.controller';
-import { GatewayActionMessage } from '../common/types/common.type';
+import {GatewayActionMessage} from '../common/types/common.type';
 
 export class ApplicationModule {
 	private bootsrap: Bootstrap;
@@ -23,6 +23,7 @@ export class ApplicationModule {
 		const amqpFactory = new AmqpFactoryModule(amqpConnection);
 
 		const endpoints = configModule.getEndpointsConfig();
+		console.log('core url', endpoints.coreUrl);
 		const coreClient = createTRPCProxyClient<CoreRouter>({
 			links: [
 				httpBatchLink({
@@ -34,7 +35,7 @@ export class ApplicationModule {
 		const vkGatewayActionsConsumer = await amqpFactory.makeConsumer(
 			gatewayActionsExchange,
 			'vk.actions',
-			'vk.actions',
+			'*',
 		);
 
 		const coreMessagePublisher = await amqpFactory.makePublisher(
@@ -77,23 +78,45 @@ export class ApplicationModule {
 
 		await Promise.all(vkGatewayInitPromises);
 
-		vkGatewayActionsConsumer.consume<GatewayActionMessage>(data => {
+		vkGatewayActionsConsumer.consume<GatewayActionMessage>(async data => {
 			const {id, action} = data;
-			const controller = gatewayToController.get(id);
-			if (controller) {
-				switch (action) {
-					case 'resume':
-						controller.enable();
-					case 'pause':
-						controller.pause();
-					case 'stop':
-						controller.pause();
-						gatewayToController.delete(id);
+			if (action === 'create') {
+				const {group, token} = data.credentials;
+				const gatewayConsumer = await amqpFactory.makeConsumer(
+					gatewayExchange,
+					`${gatewayExchange}.vk`,
+					`${gatewayExchange}.vk.${id}`,
+				);
+
+				const gatewayController = new VkGatewayController(
+					id,
+					group,
+					token,
+					gatewayConsumer,
+					coreMessagePublisher,
+					coreReportMessagePublisher,
+					endpoints,
+				);
+
+				gatewayToController.set(id, gatewayController);
+				gatewayController.init();
+			} else {
+				const controller = gatewayToController.get(id);
+				if (controller) {
+					switch (action) {
+						case 'resume':
+							controller.enable();
+						case 'pause':
+							controller.pause();
+						case 'stop':
+							controller.pause();
+							gatewayToController.delete(id);
+					}
 				}
 			}
 		});
 
-		console.log('finish init');
+		console.log('vk-getaway init');
 	};
 }
 
