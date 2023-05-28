@@ -2,7 +2,10 @@ import fastify from 'fastify';
 import {Bootstrap} from '../common/bootstap.module';
 import {fastifyTRPCPlugin} from '@trpc/server/adapters/fastify';
 import {createContext} from './trpc/context';
-import { appRouter } from './trpc/_app';
+import {appRouter} from './trpc/_app';
+import {configModule} from '../common/config/config.module';
+import {MessageConsumer} from './consumers/messages/messages.controller';
+import {AmqpFactoryModule} from '../common/amqp';
 
 export class ApplicationModule {
 	readonly bootstrap: Bootstrap;
@@ -11,7 +14,29 @@ export class ApplicationModule {
 	}
 
 	public init = async () => {
+		const db = await this.bootstrap.initDatabase(
+			configModule.getDatabaseConfig(),
+		);
+
+		const {coreMessageExchange} = configModule.getRabbitMQExchange();
+
 		console.debug('database initialize finished');
+
+		const amqp = await this.bootstrap.initAmqpConnection(
+			configModule.getAmqpConfig(),
+		);
+		const amqpFactory = new AmqpFactoryModule(amqp);
+		const consumer = new MessageConsumer(db);
+
+		const amqpConsumer = await amqpFactory.makeConsumer(
+			coreMessageExchange,
+			coreMessageExchange,
+			`*`,
+			100,
+		);
+
+		await amqpConsumer.init();
+		await amqpConsumer.consume(consumer.recieveMessage);
 
 		const server = fastify({
 			maxParamLength: 5000,
