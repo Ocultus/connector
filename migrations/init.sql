@@ -6,7 +6,6 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
- 
 CREATE TABLE customer(
     id SERIAL CONSTRAINT "customer_pk" PRIMARY KEY,
     name VARCHAR,
@@ -16,20 +15,21 @@ CREATE TABLE customer(
 
 CREATE UNIQUE INDEX "customer_email_idx" ON customer USING btree (email);
 
-CREATE TYPE gateway_type_enum AS ENUM ('tg','vk');
+CREATE TYPE gateway_type AS ENUM ('tg','vk');
 
 CREATE TABLE gateway (
     id SERIAL CONSTRAINT "gateway_pk" PRIMARY KEY,
-    project_id INT NOT NULL CONSTRAINT  project_id_fk REFERENCES project ON UPDATE cascade ON DELETE cascade,
-    credentials jsonb NOT NULL DEFAULT '{}',
+    name VARCHAR NOT NULL,
+    customer_id SERIAL NOT NULL REFERENCES customer(id),
+    credentials jsonb NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    type gateway_type_enum NOT NULL,
+    type gateway_type NOT NULL,
     enabled boolean NOT NULL DEFAULT true
 );
 
 CREATE TABLE client (
     id SERIAL CONSTRAINT "client_pk" PRIMARY KEY,
-    external_id INT NOT NULL,
+    external_id SERIAL NOT NULL,
     name VARCHAR NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
@@ -38,8 +38,8 @@ CREATE UNIQUE INDEX "client_external_id_idx" ON client USING btree (external_id)
 
 CREATE TABLE chat (
     id SERIAL CONSTRAINT "chat_pk" PRIMARY KEY,
-    client_id INT NOT NULL CONSTRAINT client_id_fk REFERENCES client ON UPDATE cascade ON DELETE cascade,
-    gateway_id INT NOT NULL CONSTRAINT gateway_id_fk REFERENCES gateway ON UPDATE cascade ON DELETE cascade,
+    client_id SERIAL NOT NULL CONSTRAINT client_id_fk REFERENCES client ON UPDATE cascade ON DELETE CASCADE,
+    gateway_id SERIAL NOT NULL CONSTRAINT gateway_id_fk REFERENCES gateway ON UPDATE cascade ON DELETE CASCADE,
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
@@ -50,8 +50,8 @@ CREATE TYPE message_type_enum as ENUM ('incoming','outgoing');
 CREATE TABLE message (
     id SERIAL CONSTRAINT "message_pk" PRIMARY KEY,
     created_at TIMESTAMP NOT NULL DEFAULT now(),
-    parent_id INT REFERENCES message(id),
-    chat_id INT REFERENCES chat(id),
+    parent_id SERIAL REFERENCES message(id),
+    chat_id SERIAL REFERENCES chat(id),
     payload jsonb NOT NULL,
     type message_type_enum NOT NULL
 );
@@ -60,7 +60,7 @@ CREATE TYPE request_type_enum as ENUM ('open','pending','closed');
 
 CREATE TABLE request (
     id SERIAL CONSTRAINT "request_pk" PRIMARY KEY,
-    chat_id INT NOT NULL CONSTRAINT chat_id_fk REFERENCES chat ON UPDATE cascade ON DELETE cascade,
+    chat_id SERIAL NOT NULL CONSTRAINT chat_id_fk REFERENCES chat ON UPDATE CASCADE ON DELETE CASCADE,
     type request_type_enum NOT NULL DEFAULT 'open',
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP
