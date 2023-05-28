@@ -34,6 +34,11 @@ export type AuthConfig = {
 	secret: string;
 };
 
+export type RabbitMQExchange = {
+	coreMessageExchange: string;
+	coreActionsExchange: string;
+};
+
 export type ConfigGetter<T> = () => T;
 
 export const getValueFromProcessEnv = (key: string) => {
@@ -78,12 +83,18 @@ export const getAuthConfig: ConfigGetter<AuthConfig> = () => ({
 	secret: getValueFromProcessEnv('AUTH_CREDENTIALS_SECRET'),
 });
 
+export const getRabbitExchangeConfig: ConfigGetter<RabbitMQExchange> = () => ({
+	coreMessageExchange: getValueFromProcessEnv('CORE_MESSAGE_EXCHANGE'),
+	coreActionsExchange: getValueFromProcessEnv('CORE_ACTIONS_EXCHANGE'),
+});
+
 class ConfigModule {
 	private database?: DatabaseConfig;
 	private amqp?: RabbitMqConfig;
 	private cloudStorage?: CloudStorageConfig;
 	private endpoints?: EndpointsConfig;
 	private auth?: AuthConfig;
+	private exchanges?: RabbitMQExchange;
 
 	public getDatabaseConfig = () => {
 		if (!this.database) {
@@ -123,6 +134,14 @@ class ConfigModule {
 		}
 
 		return this.auth;
+	};
+
+	public getRabbitMQExchange = () => {
+		if (!this.exchanges) {
+			this.exchanges = getRabbitExchangeConfig();
+		}
+
+		return this.exchanges;
 	};
 }
 
