@@ -6,6 +6,7 @@ import {AppRouter as CoreRouter} from '../core/trpc/_app';
 
 import {VkGatewayController} from './vk-gateway.controller';
 import {GatewayActionMessage} from '../common/types/common.type';
+import pino from 'pino';
 
 export class ApplicationModule {
 	private bootsrap: Bootstrap;
@@ -14,10 +15,9 @@ export class ApplicationModule {
 	}
 
 	public init = async () => {
-		const gatewayExchange = 'core.messages';
-		const gatewayActionsExchange = 'core.actions';
-		const coreReportExchange = 'core.reports';
-
+		const logger = pino();
+		const {coreMessageExchange, coreActionsExchange} =
+			configModule.getRabbitMQExchange();
 		const amqpConfig = configModule.getAmqpConfig();
 		const amqpConnection = await this.bootsrap.initAmqpConnection(amqpConfig);
 		const amqpFactory = new AmqpFactoryModule(amqpConnection);
@@ -33,21 +33,17 @@ export class ApplicationModule {
 		});
 
 		const vkGatewayActionsConsumer = await amqpFactory.makeConsumer(
-			gatewayActionsExchange,
+			coreActionsExchange,
 			'vk.actions',
 			'*',
 		);
 
 		const coreMessagePublisher = await amqpFactory.makePublisher(
-			gatewayExchange,
-		);
-
-		const coreReportMessagePublisher = await amqpFactory.makePublisher(
-			coreReportExchange,
+			coreMessageExchange,
 		);
 
 		const gatewayToController = new Map<number, VkGatewayController>();
-		const vkGateways = await coreClient.gateway.findByType.mutate({type: 'vk'});
+		const vkGateways = await coreClient.getaway.findByType.mutate({type: 'vk'});
 
 		const vkGatewayInitPromises = vkGateways.map(async vkGateway => {
 			if (vkGateway.type === 'vk') {
@@ -55,12 +51,11 @@ export class ApplicationModule {
 					id,
 					credentials: {token, group},
 				} = vkGateway;
-				const queueName = 'vk.out.id' + id;
 
 				const gatewayConsumer = await amqpFactory.makeConsumer(
-					gatewayExchange,
-					queueName,
-					queueName,
+					coreMessageExchange,
+					`${coreMessageExchange}.vk`,
+					`${coreMessageExchange}.vk.${id}`,
 				);
 				const gatewayController = new VkGatewayController(
 					id,
@@ -68,8 +63,8 @@ export class ApplicationModule {
 					token,
 					gatewayConsumer,
 					coreMessagePublisher,
-					coreReportMessagePublisher,
 					endpoints,
+					logger,
 				);
 				gatewayToController.set(id, gatewayController);
 				gatewayController.init();
@@ -80,12 +75,12 @@ export class ApplicationModule {
 
 		vkGatewayActionsConsumer.consume<GatewayActionMessage>(async data => {
 			const {id, action} = data;
-			if (action === 'create') {
+			if (action === 'create' && data.type == 'vk') {
 				const {group, token} = data.credentials;
 				const gatewayConsumer = await amqpFactory.makeConsumer(
-					gatewayExchange,
-					`${gatewayExchange}.vk`,
-					`${gatewayExchange}.vk.${id}`,
+					coreMessageExchange,
+					`${coreMessageExchange}.vk`,
+					`${coreMessageExchange}.vk.${id}`,
 				);
 
 				const gatewayController = new VkGatewayController(
@@ -94,8 +89,8 @@ export class ApplicationModule {
 					token,
 					gatewayConsumer,
 					coreMessagePublisher,
-					coreReportMessagePublisher,
 					endpoints,
+					logger,
 				);
 
 				gatewayToController.set(id, gatewayController);
@@ -116,7 +111,7 @@ export class ApplicationModule {
 			}
 		});
 
-		console.log('vk-getaway init');
+		logger.info('Vk service init');
 	};
 }
 
