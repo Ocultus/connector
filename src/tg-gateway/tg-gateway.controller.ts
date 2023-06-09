@@ -13,13 +13,16 @@ import {
 	TgAttachment,
 	TgMessage,
 } from './tg-gateway.type';
-import {InputMediaDocument} from 'telegraf/typings/core/types/typegram';
-import { CreateTRPCProxyClient, createTRPCProxyClient, httpBatchLink } from '@trpc/client';
+import {
+	InputMediaDocument,
+	InputMediaPhoto,
+} from 'telegraf/typings/core/types/typegram';
+import {CreateTRPCProxyClient} from '@trpc/client';
 import {AppRouter as CloudStorageRouter} from '../cloud-storage/trpc/router';
+import {DestinationStream, Logger, LoggerOptions} from 'pino';
 
 export class TgGatewayController {
 	private telegaf: Telegraf;
-	private cloudStorageClient: CreateTRPCProxyClient<CloudStorageRouter>;
 
 	constructor(
 		readonly id: number,
@@ -27,28 +30,27 @@ export class TgGatewayController {
 		private readonly consumer: AmqpConsumerModule,
 		private readonly publisher: AmqpPublisherModule,
 		readonly endpoints: EndpointsConfig,
+		readonly logger: Logger<LoggerOptions | DestinationStream>,
+		private cloudStorageClient: CreateTRPCProxyClient<CloudStorageRouter>,
 	) {
-		this.telegaf = new Telegraf(token);
-		this.cloudStorageClient = createTRPCProxyClient<CloudStorageRouter>({
-			links: [
-				httpBatchLink({
-					url: endpoints.cloudStorageUrl,
-				}),
-			],
-		});
+		this.telegaf = new Telegraf(token);		
 	}
 
 	public init = async () => {
-		this.telegaf.on('message', ctx => {
-			this.handleNewMessage(ctx);
-		});
-
-		this.telegaf.on('edited_message', ctx => {
-			this.handleEditMessage(ctx);
-		});
-
-		this.telegaf.launch();
-		await this.consumer.consume<Envelope>(this.sendMessage);
+		try {
+			this.telegaf.on('message', ctx => {
+				this.handleNewMessage(ctx);
+			});
+	
+			this.telegaf.on('edited_message', ctx => {
+				this.handleEditMessage(ctx);
+			});
+	
+			await this.telegaf.launch();
+			await this.consumer.consume<Envelope>(this.sendMessage);
+		} catch (error) {
+			this.logger.error(error)
+		}
 	};
 
 	public getMessageQueueName = () => {
@@ -60,7 +62,7 @@ export class TgGatewayController {
 	};
 
 	public enable = async () => {
-		this.telegaf.launch();
+		await this.telegaf.launch();
 	};
 
 	private sendMessage = async (envelope: Envelope) => {
@@ -69,66 +71,84 @@ export class TgGatewayController {
 		}
 
 		const attachmentsRaw = envelope.payload.attachments;
+		const chatId = envelope.chatId;
 		if (attachmentsRaw.length === 1) {
 			const attachment = attachmentsRaw[0];
-			if (attachment.type === 'audio' && this.telegaf.context.sendAudio) {
+			if (attachment.type === 'audio') {
 				const audio = {
 					filename: attachment.title,
 					url: attachment.url,
 				};
-				await this.telegaf.context.sendAudio(audio, {
+
+				await this.telegaf.telegram.sendAudio(chatId, audio, {
 					caption: envelope.payload.text,
 				});
-			} else if (
-				attachment.type === 'document' &&
-				this.telegaf.context.sendDocument
-			) {
+			} else if (attachment.type === 'document') {
 				const document = {
 					filename: attachment.title,
 					url: attachment.url,
 				};
 
-				await this.telegaf.context.sendDocument(document, {
+				await this.telegaf.telegram.sendDocument(chatId, document, {
 					caption: envelope.payload.text,
 				});
-			} else if (
-				attachment.type === 'image' &&
-				this.telegaf.context.sendPhoto
-			) {
-				await this.telegaf.context.sendPhoto(attachment.url, {
+			} else if (attachment.type === 'image') {
+				await this.telegaf.telegram.sendPhoto(chatId, attachment.url, {
 					caption: envelope.payload.text,
 				});
 			}
-		} else if (attachmentsRaw.length && this.telegaf.context.sendMediaGroup) {
-			const attachments = attachmentsRaw.map(attachment => {
-				let document: InputMediaDocument = {
-					type: 'document',
-					media: {
-						url: attachment.url,
-					},
-				};
+		} else if (attachmentsRaw.length) {
+			const photos: InputMediaPhoto[] = [];
+			const documents: InputMediaDocument[] = [];
 
-				if (attachment.type === 'audio' || attachment.type === 'document') {
-					document.media = {
-						url: attachment.url,
-						filename: attachment.title,
-					};
+			attachmentsRaw.forEach(attachment => {
+				if (attachment.type === 'image') {
+					photos.push({
+						type: 'photo',
+						media: attachment.url,
+					});
+				} else if (
+					attachment.type === 'document' ||
+					attachment.type === 'audio'
+				) {
+					documents.push({
+						media: {
+							url: attachment.url,
+							filename: attachment.title,
+						},
+						type: 'document',
+					});
 				}
-
-				return document;
 			});
 
-			if (envelope.payload.text) {
-				attachments[0].caption = envelope.payload.text;
-			}
+			if (photos.length) {
+				photos[photos.length - 1] = {
+					...photos[photos.length - 1],
+					caption: envelope.payload.text,
+				};
 
-			await this.telegaf.context.sendMediaGroup(attachments);
-		} else if (envelope.payload.text && this.telegaf.context.sendMessage) {
-			await this.telegaf.context.sendMessage(envelope.payload.text);
+				if (documents.length) {
+					await Promise.all([
+						this.telegaf.telegram.sendMediaGroup(chatId, photos),
+						this.telegaf.telegram.sendMediaGroup(chatId, documents),
+					]);
+				} else {
+					await this.telegaf.telegram.sendMediaGroup(chatId, photos);
+				}
+			} else if (documents.length) {
+				documents[documents.length - 1] = {
+					...documents[documents.length - 1],
+					caption: envelope.payload.text,
+				};
+				await this.telegaf.telegram.sendMediaGroup(chatId, documents);
+			}
+		} else if (envelope.payload.text) {
+			this.telegaf.telegram.sendMessage(chatId, envelope.payload.text);
 		}
 	};
 
 	private handleNewMessage = async (ctx: NewMessageCtx) => {
+		console.log(ctx.update.message);
 		const messages = await this.handleMessage(ctx.message, 'new_message');
 		this.publisher.publish(messages, this.getMessageQueueName());
 	};
@@ -148,7 +168,7 @@ export class TgGatewayController {
 	private handleMessage = async (
 		ctx: TgMessage,
 		eventType: EventType,
-		parentMessageId: string | null = null,
+		parentMessageId?: string,
 	): Promise<Envelope[]> => {
 		const containsAttachmetnts =
 			!!ctx.document || !!ctx.photo?.length || !!ctx.audio || !!ctx.voice;
@@ -189,13 +209,13 @@ export class TgGatewayController {
 				audio,
 			};
 
-			const attachments = await this.handleMessageAttachments(
+			const attachment = await this.handleMessageAttachments(
 				rawAttachments,
 				ctx.from.id,
 				ctx.chat.id,
 			);
 
-			envelope.payload.attachments = attachments;
+			envelope.payload.attachments = attachment ? [attachment] : [];
 		}
 
 		if (ctx.reply_to_message) {
@@ -214,78 +234,79 @@ export class TgGatewayController {
 		attachments: TgAttachment,
 		userId: number,
 		chatId: number,
-	): Promise<InternalAttachment[]> => {
-		const files = [];
+	): Promise<InternalAttachment | undefined> => {
+		let attachment;
 		if (attachments.audio) {
 			const {file_id, title, mime_type} = attachments.audio;
-			files.push({
+			attachment = {
 				id: file_id,
 				title,
 				mime_type,
 				type: 'audio',
-			});
+			};
 		}
 
 		if (attachments.document) {
 			const {file_id, file_name, mime_type} = attachments.document;
-			files.push({
+			attachment = {
 				id: file_id,
 				file_name,
 				mime_type,
 				type: 'document',
-			});
+			};
 		}
 
 		if (attachments.photo?.length) {
 			const {file_id} = attachments.photo[attachments.photo.length - 1];
-			files.push({
+			attachment = {
 				id: file_id,
 				type: 'image',
-			});
+			};
 		}
 
 		if (attachments.voice) {
 			const {file_id, mime_type} = attachments.voice;
-			files.push({
+			attachment = {
 				id: file_id,
 				mime_type,
 				type: 'voice',
-			});
+			};
 		}
 
-		const promises = files.map(async file => {
-			const fileUrl = await this.fileIdToUrl(file.id);
+		if (attachment) {
+			const tgFileUrl = await this.fileIdToUrl(attachment.id);
+			const tgFileUrlString = tgFileUrl.toString();
+			const route = ['tg', userId, attachment.type].join('/');
+			const fileUrlOnCloud = await this.cloudStorageClient.object.upload.mutate(
+				{
+					route,
+					url: tgFileUrlString,
+				},
+			);
 
-			const route = ['tg', chatId, userId, file.type].join('/');
-			const url = await this.cloudStorageClient.object.upload.mutate({
-				route,
-				url: fileUrl.toString(),
-			});
-
-			switch (file.type) {
+			const {type} = attachment;
+			switch (type) {
 				case 'document':
 					return {
-						type: file.type,
-						url,
-						title: file.title ?? '',
-						extension: file.mime_type ?? 'txt',
+						type,
+						url: fileUrlOnCloud,
+						title: attachment.title ?? 'title.txt',
+						extension: attachment.mime_type ?? 'txt',
 					};
 				case 'image':
 					return {
-						type: file.type,
-						url,
+						type,
+						url: fileUrlOnCloud,
 					};
 				case 'audio' || 'voice':
 					return {
-						type: file.type,
-						url,
-						title: file.title ?? '',
+						type,
+						url: fileUrlOnCloud,
+						title: attachment.title ?? 'title.mp3',
 					};
-				default:
-					throw new Error(`Unknown attachment type`);
 			}
-		});
+		}
 
-		return Promise.all(promises);
+		return undefined;
 	};
 }

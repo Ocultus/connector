@@ -5,7 +5,8 @@ import {configModule} from '../common/config/config.module';
 import {AppRouter as CoreRouter} from '../core/trpc/_app';
 import {TgGatewayController} from './tg-gateway.controller';
 import {GatewayActionMessage} from '../common/types/common.type';
-
+import {AppRouter as CloudStorageRouter} from '../cloud-storage/trpc/router';
+import pino, {P} from 'pino';
 export class ApplicationModule {
 	private bootsrap: Bootstrap;
 
@@ -14,14 +15,20 @@ export class ApplicationModule {
 	}
 
 	public init = async () => {
-		const gatewayExchange = 'core.messages';
-		const gatewayActionsExchange = 'core.actions';
-		const coreReportExchange = 'core.reports';
-
+		const logger = pino();
+		const {coreActionsExchange, coreMessageExchange} =
+			configModule.getRabbitMQExchange();
 		const amqpConfig = configModule.getAmqpConfig();
 		const amqpConnection = await this.bootsrap.initAmqpConnection(amqpConfig);
 		const amqpFactory = new AmqpFactoryModule(amqpConnection);
 		const endpoints = configModule.getEndpointsConfig();
+		const cloudStorageClient = createTRPCProxyClient<CloudStorageRouter>({
+			links: [
+				httpBatchLink({
+					url: endpoints.cloudStorageUrl,
+				}),
+			],
+		});
 
 		const coreClient = createTRPCProxyClient<CoreRouter>({
 			links: [
@@ -32,17 +39,17 @@ export class ApplicationModule {
 		});
 
 		const tgGatewayActionsConsumer = await amqpFactory.makeConsumer(
-			gatewayActionsExchange,
+			coreActionsExchange,
 			'tg.actions',
-			'tg.actions',
+			'*',
 		);
 
 		const coreMessagePublisher = await amqpFactory.makePublisher(
-			gatewayExchange,
+			coreMessageExchange,
 		);
 
 		const gatewayToController = new Map<number, TgGatewayController>();
-		const tgGateways = await coreClient.gateway.findByType.mutate({type: 'tg'});
+		const tgGateways = await coreClient.getaway.findByType.mutate({type: 'tg'});
 
 		const tgGatewayInitPromises = tgGateways.map(async tgGateway => {
 			if (tgGateway.type === 'tg') {
@@ -50,19 +57,21 @@ export class ApplicationModule {
 					id,
 					credentials: {token},
 				} = tgGateway;
-				const queueName = 'tg.out.bot.' + id;
 
 				const gatewayConsumer = await amqpFactory.makeConsumer(
-					gatewayExchange,
-					queueName,
-					queueName,
+					coreMessageExchange,
+					`${coreMessageExchange}.tg`,
+					`${coreMessageExchange}.tg.${id}`,
 				);
+
 				const gatewayController = new TgGatewayController(
 					id,
 					token,
 					gatewayConsumer,
 					coreMessagePublisher,
 					endpoints,
+					logger,
+					cloudStorageClient,
 				);
 				gatewayToController.set(id, gatewayController);
 				gatewayController.init();
@@ -70,25 +79,50 @@ export class ApplicationModule {
 		});
 
 		await Promise.all(tgGatewayInitPromises);
-
-		tgGatewayActionsConsumer.consume<GatewayActionMessage>(data => {
+		
+		tgGatewayActionsConsumer.consume<GatewayActionMessage>(async data => {
+			console.log(data);
 			const {id, action} = data;
-			if (action === 'create') {
-				
+			if (action === 'create' && data.type == 'tg') {
+				const {token} = data.credentials;
+				const gatewayConsumer = await amqpFactory.makeConsumer(
+					coreMessageExchange,
+					`${coreMessageExchange}.tg`,
+					`${coreMessageExchange}.tg.${id}`,
+				);
+
+				const gatewayController = new TgGatewayController(
+					id,
+					token,
+					gatewayConsumer,
+					coreMessagePublisher,
+					endpoints,
+					logger,
+					cloudStorageClient,
+				);
+
+				gatewayToController.set(id, gatewayController);
+				gatewayController.init();
 			}
 			const controller = gatewayToController.get(id);
 			if (controller) {
 				switch (action) {
 					case 'resume':
-						controller.enable();
+						console.log(1234);
+						await controller.enable();
+						break;
 					case 'pause':
-						controller.pause();
+						await controller.pause();
+						break;
 					case 'stop':
-						controller.pause();
+						await controller.pause();
 						gatewayToController.delete(id);
+						break;
 				}
 			}
 		});
+
+		logger.info('Tg serivce init');
 	};
 }
 
