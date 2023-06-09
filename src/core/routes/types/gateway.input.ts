@@ -9,10 +9,7 @@ export const FindByTypeGetawayInput = z.object({
 	type: CredentialTypeRow,
 });
 
-export const CreateGetawayInput = z.intersection(
-	GatewayCredentialsRow,
-	z.object({projectId: z.number()}),
-);
+export const CreateGetawayInput = GatewayCredentialsRow;
 
 export const UpdateGetawayInput = IdInput.merge(
 	z.object({
@@ -21,5 +18,3 @@ export const UpdateGetawayInput = IdInput.merge(
 		type: CredentialTypeRow.optional(),
 	}),
 );
-
-type q = z.infer<typeof UpdateGetawayInput>

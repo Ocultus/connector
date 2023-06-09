@@ -20,7 +20,10 @@ const TgCredentialsRow = z.object({
 	}),
 });
 
-export const GatewayCredentialsRow = z.union([TgCredentialsRow, VkCredentialsRow]);
+export const GatewayCredentialsRow = z.union([
+	TgCredentialsRow,
+	VkCredentialsRow,
+]);
 
 export type GatewayCredentials = z.infer<typeof GatewayCredentialsRow>;
 
@@ -29,7 +32,7 @@ export const GatewayEntityRow = z.intersection(
 	z.intersection(
 		z.object({
 			enabled: z.boolean(),
-			projectId: z.number(),
+			customerId: z.number(),
 		}),
 		z.union([VkCredentialsRow, TgCredentialsRow]),
 	),

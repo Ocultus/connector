@@ -5,6 +5,6 @@ export const IdInput = z.object({
 });
 
 export const PaginationInput = z.object({
-  limit: z.number().min(1).max(100).nullish(),
-  cursor: z.number().nullish(),
-})
+	limit: z.number().min(1).max(100).nullish(),
+	cursor: z.number().nullish(),
+});

@@ -3,10 +3,10 @@ import {z} from 'zod';
 
 export const sql = createSqlTag({
 	typeAliases: {
-		id: z.object({
-			id: z.number(),
+		number: z.object({
+			number: z.number(),
 		}),
 		void: z.object({}).strict(),
-		string: z.string(),
+		string: z.object({string: z.string()}),
 	},
 });
