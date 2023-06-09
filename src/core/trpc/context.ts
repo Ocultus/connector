@@ -4,8 +4,9 @@ import {configModule} from '../../common/config/config.module';
 import * as trpcNext from '@trpc/server/adapters/next';
 import _ from 'lodash';
 import Jwt, {JwtPayload} from 'jsonwebtoken';
-import {sql} from 'slonik';
-import {AuthorizationUser} from '../types/employee.type';
+import {AuthorizationUser} from '../types/customer.type';
+import {CustomerRepository} from '../repository/customer.repository';
+import { AmqpFactoryModule } from '../../common/amqp';
 
 const initDb = _.memoize(async () => {
 	const bootstrap = new Bootstrap();
@@ -13,12 +14,13 @@ const initDb = _.memoize(async () => {
 });
 
 const getUserFromHeader = async (authorization: string) => {
+	const {secret} = configModule.getAuthConfig();
 	if (!authorization) {
 		return undefined;
 	}
 
 	const jwtToken = authorization.split(' ')[1];
-	const {email} = Jwt.verify(jwtToken, '') as JwtPayload;
+	const {email} = Jwt.verify(jwtToken, secret) as JwtPayload;
 	if (!email) {
 		return undefined;
 	}
@@ -28,22 +30,31 @@ const getUserFromHeader = async (authorization: string) => {
 
 const getUserByEmail = async (email: string) => {
 	const db = await initDb();
-	const user = await db.maybeOne(sql.type(AuthorizationUser)`
-		Select id, email from users
-		where email = ${email}
-	`);
+	const user = await CustomerRepository.findByEmail(db, email);
 
 	return user ? AuthorizationUser.parse(user) : undefined;
 };
 
+const initActionsPublisher = _.memoize(async () => {
+	const bootstrap = new Bootstrap();
+	const amqp = await bootstrap.initAmqpConnection(
+		configModule.getAmqpConfig(),
+	);
+	const amqpFactory = new AmqpFactoryModule(amqp);
+	const {coreActionsExchange} = configModule.getRabbitMQExchange();
+	return amqpFactory.makePublisher(coreActionsExchange)
+})
+
 export async function createContext({req}: trpcNext.CreateNextContextOptions) {
 	const db = await initDb();
-	const authorizationHeader = req.query.authorization;
-	const user = getUserFromHeader(authorizationHeader);
+	const authorizationHeader = req.headers.authorization;
+	const user = await getUserFromHeader(authorizationHeader);
+	const actionsPublisher = await initActionsPublisher() 
 
 	return {
 		db,
 		user,
+		actionsPublisher,
 	};
 }
 

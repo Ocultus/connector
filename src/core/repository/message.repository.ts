@@ -1,5 +1,6 @@
-import {DatabasePool, DatabaseTransactionConnection, sql} from 'slonik';
+import {DatabasePool, DatabaseTransactionConnection} from 'slonik';
 import {MessagePayload} from '../../common/types/payload';
+import {sql} from '../types/db.type';
 
 export class MessageRepository {
 	static async insertOne(
@@ -9,15 +10,13 @@ export class MessageRepository {
 		payload: MessagePayload,
 		type: 'incoming' | 'outgoing',
 	) {
-		await t.query(
-			sql.unsafe`INSERT INTO messages (
+		await t.query(sql.typeAlias('void')`
+			INSERT INTO messages (
         parent_id, 
         chat_id,
         payload,
         type,
       )
-       VALUES ($1,$2,$3,$4)`,
-			[parentId, chatId, JSON.stringify(payload), type],
-		);
+      VALUES (${parentId},${chatId},${JSON.stringify(payload)}, ${type})`);
 	}
 }

@@ -1,8 +1,9 @@
-import {DatabaseTransactionConnection, sql} from 'slonik';
+import {DatabaseTransactionConnection} from 'slonik';
 import {ClientEntityRow} from '../types/client.type';
+import {sql} from '../types/db.type';
 
 export class ClientRepository {
-	static async getClient(
+	static async getOne(
 		t: DatabaseTransactionConnection,
 		name: string,
 		external_id: number,

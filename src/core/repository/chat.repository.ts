@@ -1,8 +1,9 @@
-import {DatabasePool, DatabaseTransactionConnection, sql} from 'slonik';
+import {DatabasePool, DatabaseTransactionConnection} from 'slonik';
 import {ChatEntityRow} from '../types/chat.type';
+import {sql} from '../types/db.type';
 
 export class ChatRepository {
-	static getChatById(db: DatabasePool, id: number) {
+	static findById(db: DatabasePool, id: number) {
 		return db.maybeOne(sql.type(ChatEntityRow)`
 			SELECT * FROM chats 
 			WHERE id = ${id}
