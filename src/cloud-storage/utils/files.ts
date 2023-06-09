@@ -1,14 +1,16 @@
 import fileType from 'file-type';
 import {readFileSync} from 'fs';
-import fetch from 'node-fetch';
 import path from 'path';
 import {FileAttributes, UploadFile} from './files.type';
+import get from 'got';
 
 const urlToBuffer = async (url: string): Promise<Buffer> => {
-	const fimg = await fetch(url);
-	const buffer = await fimg.arrayBuffer();
+	const fimg = await get(url, {
+		responseType: 'buffer',
+		retry: 5,
+	}).buffer();
 
-	return Buffer.from(buffer);
+	return fimg;
 };
 
 const getFileExt = (file: UploadFile): string => {
