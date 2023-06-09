@@ -2,7 +2,7 @@ import {configModule} from '../common/config/config.module';
 import Fastify from 'fastify';
 import {fastifyTRPCPlugin} from '@trpc/server/adapters/fastify';
 import {createContext} from './trpc/context';
-import { appRouter } from './trpc/router';
+import {appRouter} from './trpc/router';
 
 export class ApplicationModule {
 	public init = async () => {

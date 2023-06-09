@@ -111,12 +111,12 @@ services:
       - ENDPOINTS_CORE_URL=${ENDPOINTS_CORE_URL:-core/api/trpc}
     command: 'yarn run:tg-gateway'
 
-  cloud-storage: 
+  cloud-storage:
     container_name: cloud-storage
     build:
       context: ./
       dockerfile: docker/app.dockerfile
-    environment: 
+    environment:
       - CLOUD_STORAGE_KEY=${CLOUD_STORAGE_KEY:-key}
       - CLOUD_STORAGE_PORT=${CLOUD_STORAGE_PORT:-3002}
       - CLOUD_STORAGE_KEY_ID=${CLOUD_STORAGE_KEY_ID:-key_id}
@@ -124,9 +124,9 @@ services:
       - CLOUD_STORAGE_REGION=${CLOUD_STORAGE_REGION:-eu-west-1}
       - CLOUD_STORAGE_ENDPOINT_URL=${CLOUD_STORAGE_ENDPOINT_URL:-https://storage.yandexcloud.net}
     command: 'yarn run:cloud-storage'
-    ports: 
+    ports:
       - '3001:3001'
-  
+
   core:
     container_name: core
     depends_on:
@@ -146,5 +146,5 @@ services:
       - PG_DB=${PG_DB:-connector_db}
       - ENDPOINT_CLOUD_STORAGE=${ENDPOINT_CLOUD_STORAGE:-cloud-storage/upload-object}
     command: 'yarn run:core'
-    ports: 
+    ports:
       - '3000:3000'

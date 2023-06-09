@@ -1,11 +1,10 @@
-import { AuthRouter } from "../routes/auth.router";
-import { GatewayRouter } from "../routes/gateway.router";
-import { router } from "./router";
+import {AuthRouter} from '../routes/auth.router';
+import {GatewayRouter} from '../routes/gateway.router';
+import {router} from './router';
 
 export const appRouter = router({
-  auth: AuthRouter,
-  gateway: GatewayRouter,
+	getaway: GatewayRouter,
+	auth: AuthRouter,
 });
 
 export type AppRouter = typeof appRouter;
-
