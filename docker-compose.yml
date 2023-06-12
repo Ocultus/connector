@@ -93,6 +93,8 @@ services:
       - AMQP_PASS=${AMQP_USER:-pass}
       - ENDPOINTS_CLOUD_STORAGE_URL=${ENDPOINTS_CLOUD_STORAGE_URL:-cloud-storage/api/trpc}
       - ENDPOINTS_CORE_URL=${ENDPOINTS_CORE_URL:-core/api/trpc}
+      - CORE_MESSAGE_EXCHANGE=${CLOUD_MESSAGE_EXCHANGE:-core.messages}
+      - CORE_ACTIONS_EXCHANGE=${CLOUD_ACTIONS_EXCHANGE:-core.actions}
     command: 'yarn run:vk-gateway'
 
   tg-gateway:
@@ -109,6 +111,8 @@ services:
       - AMQP_PASS=${AMQP_USER:-pass}
       - ENDPOINTS_CLOUD_STORAGE_URL=${ENDPOINTS_CLOUD_STORAGE_URL:-cloud-storage/upload-object}
       - ENDPOINTS_CORE_URL=${ENDPOINTS_CORE_URL:-core/api/trpc}
+      - CORE_MESSAGE_EXCHANGE=${CLOUD_MESSAGE_EXCHANGE:-core.messages}
+      - CORE_ACTIONS_EXCHANGE=${CLOUD_ACTIONS_EXCHANGE:-core.actions}
     command: 'yarn run:tg-gateway'
 
   cloud-storage:
@@ -145,6 +149,8 @@ services:
       - PG_PORT=${PG_PORT:-5432}
       - PG_DB=${PG_DB:-connector_db}
       - ENDPOINT_CLOUD_STORAGE=${ENDPOINT_CLOUD_STORAGE:-cloud-storage/upload-object}
+      - CORE_MESSAGE_EXCHANGE=${CLOUD_MESSAGE_EXCHANGE:-core.messages}
+      - CORE_ACTIONS_EXCHANGE=${CLOUD_ACTIONS_EXCHANGE:-core.actions}
     command: 'yarn run:core'
     ports:
       - '3000:3000'
