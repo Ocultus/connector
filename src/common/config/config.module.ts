@@ -2,11 +2,11 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 export type DatabaseConfig = {
-	user: string;
+	username: string;
 	password: string;
 	host: string;
 	port: number;
-	database: string;
+	databaseName: string;
 };
 
 export type RabbitMqConfig = {
@@ -27,7 +27,17 @@ export type CloudStorageConfig = {
 
 export type EndpointsConfig = {
 	cloudStorageUrl: string;
-}
+	coreUrl: string;
+};
+
+export type AuthConfig = {
+	secret: string;
+};
+
+export type RabbitMQExchange = {
+	coreMessageExchange: string;
+	coreActionsExchange: string;
+};
 
 export type ConfigGetter<T> = () => T;
 
@@ -41,8 +51,8 @@ export const getValueFromProcessEnv = (key: string) => {
 };
 
 export const getDatabaseConfig: ConfigGetter<DatabaseConfig> = () => ({
-	database: getValueFromProcessEnv('PG_DB'),
-	user: getValueFromProcessEnv('PG_USER'),
+	databaseName: getValueFromProcessEnv('PG_DB'),
+	username: getValueFromProcessEnv('PG_USER'),
 	password: getValueFromProcessEnv('PG_PASS'),
 	host: getValueFromProcessEnv('PG_HOST'),
 	port: Number.parseInt(getValueFromProcessEnv('PG_PORT')),
@@ -65,14 +75,26 @@ export const getCloudStorageConfig: ConfigGetter<CloudStorageConfig> = () => ({
 });
 
 export const getEndpointsConfig: ConfigGetter<EndpointsConfig> = () => ({
+	coreUrl: getValueFromProcessEnv('ENDPOINTS_CORE_URL'),
 	cloudStorageUrl: getValueFromProcessEnv('ENDPOINTS_CLOUD_STORAGE_URL'),
-})
+});
+
+export const getAuthConfig: ConfigGetter<AuthConfig> = () => ({
+	secret: getValueFromProcessEnv('AUTH_CREDENTIALS_SECRET'),
+});
+
+export const getRabbitExchangeConfig: ConfigGetter<RabbitMQExchange> = () => ({
+	coreMessageExchange: getValueFromProcessEnv('CORE_MESSAGE_EXCHANGE'),
+	coreActionsExchange: getValueFromProcessEnv('CORE_ACTIONS_EXCHANGE'),
+});
 
 class ConfigModule {
 	private database?: DatabaseConfig;
 	private amqp?: RabbitMqConfig;
 	private cloudStorage?: CloudStorageConfig;
 	private endpoints?: EndpointsConfig;
+	private auth?: AuthConfig;
+	private exchanges?: RabbitMQExchange;
 
 	public getDatabaseConfig = () => {
 		if (!this.database) {
@@ -104,7 +126,23 @@ class ConfigModule {
 		}
 
 		return this.endpoints;
-	}
+	};
+
+	public getAuthConfig = () => {
+		if (!this.auth) {
+			this.auth = getAuthConfig();
+		}
+
+		return this.auth;
+	};
+
+	public getRabbitMQExchange = () => {
+		if (!this.exchanges) {
+			this.exchanges = getRabbitExchangeConfig();
+		}
+
+		return this.exchanges;
+	};
 }
 
 export const configModule = new ConfigModule();

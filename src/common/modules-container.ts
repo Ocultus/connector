@@ -4,7 +4,7 @@ import {
 	InfrastructureTypes,
 } from './types/di/infrastructure.type';
 import {AmqpFactoryModule} from './amqp';
-import { Connection } from 'amqplib';
+import {Connection} from 'amqplib';
 
 export class ModulesContainer {
 	private container!: interfaces.Container;

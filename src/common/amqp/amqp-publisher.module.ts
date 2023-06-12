@@ -13,11 +13,9 @@ export class AmqpPublisherModule {
 			this.channel = await this.connection.createChannel();
 			this.channel.assertExchange(this.exchange, 'topic', {durable: true});
 			this.channel.on('close', async () => {
-				await sleep(20);
 				await this.init(retry + 1);
 			});
 		} catch (e) {
-			await sleep(10);
 
 			if (retry > 5) {
 				throw e;

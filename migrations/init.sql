@@ -1,16 +1,3 @@
-CREATE TYPE employee_status_enum AS ENUM ('online','offline');
-
-CREATE TABLE employee (
-    id SERIAL CONSTRAINT "employee_pk" PRIMARY KEY,
-    name VARCHAR NOT NULL,
-    email VARCHAR NOT NULL,
-    password TEXT NOT NULL,
-    status employee_status_enum NOT NULL DEFAULT 'offline',
-    created_at TIMESTAMP NOT NULL DEFAULT now()
-);
-
-CREATE UNIQUE INDEX "employee_email_idx" ON employee USING btree (email);
-
 CREATE OR REPLACE FUNCTION refresh_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -19,77 +6,70 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
- 
-CREATE TABLE customer(
+CREATE TABLE IF NOT EXISTS customer(
     id SERIAL CONSTRAINT "customer_pk" PRIMARY KEY,
     name VARCHAR,
     email VARCHAR NOT NULL,
-    password TEXT NOT NULL
+    password TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX "customer_email_idx" ON customer USING btree (email);
+CREATE UNIQUE INDEX IF NOT EXISTS "customer_email_idx" ON customer USING btree (email);
 
+CREATE TYPE gateway_type AS ENUM ('tg','vk');
 
-CREATE TABLE project (
-    id SERIAL CONSTRAINT "project_pk" PRIMARY KEY,
-    name VARCHAR NOT NULL,
-    customer_id INT NOT NULL CONSTRAINT customer_id_fk REFERENCES customer ON UPDATE cascade ON DELETE cascade
-);
-
-CREATE TYPE gateway_type_enum AS ENUM ('tg','vk');
-
-CREATE TABLE gateway (
+CREATE TABLE IF NOT EXISTS gateway (
     id SERIAL CONSTRAINT "gateway_pk" PRIMARY KEY,
-    project_id INT NOT NULL CONSTRAINT  project_id_fk REFERENCES project ON UPDATE cascade ON DELETE cascade,
-    credentials jsonb NOT NULL DEFAULT '{}',
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    type gateway_type_enum NOT NULL,
-    enabled boolean NOT NULL DEFAULT true
-);
-
-CREATE TABLE client (
-    id SERIAL CONSTRAINT "client_pk" PRIMARY KEY,
-    external_id INT NOT NULL,
     name VARCHAR NOT NULL,
-    avatar VARCHAR,
+    customer_id SERIAL NOT NULL REFERENCES customer(id),
+    credentials jsonb NOT NULL UNIQUE,
+    type gateway_type NOT NULL,
+    enabled boolean NOT NULL DEFAULT true,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS client (
+    id SERIAL CONSTRAINT "client_pk" PRIMARY KEY,
+    social_network gateway_type NOT NULL,
+    external_id SERIAL NOT NULL,
+    name VARCHAR NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX "client_external_id_idx" ON client USING btree (external_id);
+CREATE UNIQUE INDEX IF NOT EXISTS client_identity ON client(external_id, social_network)
 
-CREATE TABLE chat (
+CREATE TABLE IF NOT EXISTS chat (
     id SERIAL CONSTRAINT "chat_pk" PRIMARY KEY,
-    client_id INT NOT NULL CONSTRAINT client_id_fk REFERENCES client ON UPDATE cascade ON DELETE cascade,
-    gateway_id INT NOT NULL CONSTRAINT gateway_id_fk REFERENCES gateway ON UPDATE cascade ON DELETE cascade,
+    client_id SERIAL NOT NULL CONSTRAINT client_id_fk REFERENCES client ON UPDATE cascade ON DELETE CASCADE,
+    gateway_id SERIAL NOT NULL CONSTRAINT gateway_id_fk REFERENCES gateway,
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
-
-CREATE UNIQUE INDEX "chat_idx" ON chat USING btree (client_id,gateway_id);
 
 CREATE TYPE message_type_enum as ENUM ('incoming','outgoing');
 
-CREATE TABLE message (
+CREATE TABLE IF NOT EXISTS message (
     id SERIAL CONSTRAINT "message_pk" PRIMARY KEY,
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    parent_id INT REFERENCES message(id),
+    parent_id INT DEFAULT NULL,
+    external_id SERIAL NOT NULL,
+    chat_id SERIAL REFERENCES chat(id),
     payload jsonb NOT NULL,
-    type message_type_enum NOT NULL
+    type message_type_enum NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE TYPE request_type_enum as ENUM ('open','pending','closed');
 
-CREATE TABLE request (
+CREATE TABLE IF NOT EXISTS request (
     id SERIAL CONSTRAINT "request_pk" PRIMARY KEY,
-    chat_id  INT NOT NULL CONSTRAINT chat_id_fk REFERENCES chat ON UPDATE cascade ON DELETE cascade,
-    client_id INT NOT NULL CONSTRAINT client_id_fk REFERENCES client ON UPDATE cascade ON DELETE cascade,
+    gateway_id SERIAL NOT NULL CONSTRAINT request_gateway_id REFERENCES gateway ON UPDATE CASCADE ON DELETE CASCADE,
+    chat_id SERIAL NOT NULL CONSTRAINT chat_id_fk REFERENCES chat ON UPDATE CASCADE ON DELETE CASCADE,
     type request_type_enum NOT NULL DEFAULT 'open',
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP
+    updated_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE TRIGGER refresh_updated_at_column_request
     BEFORE UPDATE
-    ON
-        request
+    ON request
     FOR EACH ROW
 EXECUTE PROCEDURE refresh_updated_at_column();

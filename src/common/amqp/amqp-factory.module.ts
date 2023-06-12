@@ -3,7 +3,7 @@ import 'reflect-metadata';
 import {AmqpConsumerModule} from './amqp-consumer.module';
 import {AmqpPublisherModule} from './amqp-publisher.module';
 import {InfrastructureTypes} from '../types/di/infrastructure.type';
-import { Connection } from 'amqplib';
+import {Connection} from 'amqplib';
 
 @injectable()
 export class AmqpFactoryModule {

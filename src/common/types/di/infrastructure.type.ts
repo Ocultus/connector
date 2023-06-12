@@ -1,7 +1,7 @@
 export const InfrastructureTypes = {
-  AmqpConnection: Symbol.for('AmqpConnection'),
+	AmqpConnection: Symbol.for('AmqpConnection'),
 };
 
 export const InfrastructureModuleTypes = {
-  AmqpFactoryModule: Symbol.for('AmqpFactoryModule'),
+	AmqpFactoryModule: Symbol.for('AmqpFactoryModule'),
 };

@@ -1,4 +1,4 @@
-import {Static, Type} from '@sinclair/typebox';
+import {z} from 'zod';
 
 export type CloudStorageControllerOptions = {
 	accessKeyId: string;
@@ -8,17 +8,9 @@ export type CloudStorageControllerOptions = {
 	bucket: string;
 };
 
-export const UploadFile = Type.Object({
-	buffer: Type.Optional(Type.Uint8Array()),
-	url: Type.Optional(Type.String()),
-	mimetype: Type.Optional(Type.String()),
-	route: Type.String(),
+export const UploadFile = z.object({
+	buffer: z.instanceof(Uint8Array).optional(),
+	url: z.string().optional(),
+	mimetype: z.string().optional(),
+	route: z.string(),
 });
-
-export type UploadFileRequestBody = Static<typeof UploadFile>;
-
-export const UploadedFile = Type.Object({
-	url: Type.String(),
-});
-
-export type UploadFileResponseBody = Static<typeof UploadedFile>;
