@@ -49,7 +49,10 @@ export const AuthRouter = t.router({
 			email,
 		);
 		if (userWithThisEmailExist) {
-			throw new TRPCError({code: 'BAD_REQUEST'});
+			throw new TRPCError({
+				code: 'BAD_REQUEST',
+				message: 'Email already exists',
+			});
 		}
 
 		const hashedPassword = await bcrypt.hash(password, 10);

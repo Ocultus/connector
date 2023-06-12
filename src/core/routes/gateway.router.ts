@@ -2,72 +2,81 @@ import {GatewayEntity, GatewayEntityRow} from '../types/gateway.type';
 import {protectedProcedure} from '../trpc/middleware';
 import {GatewayRepository} from '../repository/gateway.repository';
 import {
-	CreateGetawayInput,
-	FindByTypeGetawayInput,
-	UpdateGetawayInput,
+	CreateGatewayInput,
+	FindByTypeGatewayInput,
+	GetAllGetawayInput,
+	UpdateGatewayInput,
 } from './types/gateway.input';
 import {t} from '../trpc/router';
-import {IdInput, PaginationInput} from './types/base.input';
-import {isUserGetawayGuard} from '../guards/isUserGetaway.guard';
+import {IdInput} from './types/base.input';
 import {DatabasePool} from 'slonik';
 import {AmqpPublisherModule} from '../../common/amqp';
 import {TRPCError} from '@trpc/server';
+import {isCustomerGatewayGuard} from '../guards/isCustomerGetaway.guard';
 
 const actionQueryHandler = async (
 	db: DatabasePool,
-	actionsPublisher: AmqpPublisherModule,
+	actionPublisher: AmqpPublisherModule,
 	action: 'create' | 'pause' | 'resume' | 'stop',
-	getaway?: GatewayEntity,
+	gateway?: GatewayEntity,
 	id?: number,
 ) => {
-	if (!getaway || !id) {
+	if (!gateway && !id) {
 		throw new TRPCError({code: 'BAD_REQUEST'});
 	}
 
-	if (!getaway) {
-		getaway = await GatewayRepository.getById(db, id);
+	if (!gateway) {
+		gateway = await GatewayRepository.getById(db, id!);
 	}
 
-	const routingKey = getaway.type + '.actions';
+	const routingKey = gateway.type;
 	let payload: {} = {
-		id: getaway.id,
+		id: gateway.id,
 		action,
 	};
 
 	if (action === 'create') {
 		payload = {
 			...payload,
-			credentials: getaway.credentials,
-			type: getaway.type,
+			credentials: gateway.credentials,
+			type: gateway.type,
 		};
-		actionsPublisher.publish(payload, routingKey);
+		actionPublisher.publish(payload, routingKey);
 	} else {
-		actionsPublisher.publish(payload, routingKey);
+		actionPublisher.publish(payload, routingKey);
 	}
 };
 
 export const GatewayRouter = t.router({
 	create: protectedProcedure
-		.input(CreateGetawayInput)
+		.input(CreateGatewayInput)
 		.mutation(async ({ctx, input}) => {
-			const {credentials, type} = input;
-			const {db, user, actionsPublisher} = ctx;
+			const {credentials, type, name} = input;
+			const {db, user, actionPublisher} = ctx;
 
-			const getaway = await GatewayRepository.insertOne(
+			let gatewayName = name;
+			if (!name) {
+				const countOfCustomerGateways =
+					await GatewayRepository.countOfCustomerGateways(db, user.id);
+				gatewayName = `Проект ${countOfCustomerGateways.number + 1}`;
+			}
+
+			const gateway = await GatewayRepository.insertOne(
 				db,
 				credentials,
 				type,
 				user.id,
+				gatewayName!,
 			);
-			if (!getaway) {
+			if (!gateway) {
 				throw new TRPCError({code: 'BAD_REQUEST'});
 			}
 
-			await actionQueryHandler(db, actionsPublisher, 'create', getaway);
-			return GatewayEntityRow.parse(getaway);
+			await actionQueryHandler(db, actionPublisher, 'create', gateway);
+			return GatewayEntityRow.parse(gateway);
 		}),
 	findByType: t.procedure
-		.input(FindByTypeGetawayInput)
+		.input(FindByTypeGatewayInput)
 		.mutation(async ({ctx, input}) => {
 			const {type} = input;
 			const gatewaysRaw = await GatewayRepository.findByType(ctx.db, type);
@@ -76,55 +85,57 @@ export const GatewayRouter = t.router({
 				return GatewayEntityRow.parse(gateway);
 			});
 		}),
-
 	getAll: protectedProcedure
-		.input(PaginationInput)
-		.query(async ({ctx, input}) => {
-			const {limit, cursor} = input;
-		}),
+		.input(GetAllGetawayInput)
+		.mutation(async ({ctx, input}) => {
+			const {db, user} = ctx;
+			const {type} = input;
 
+			const getaways = await GatewayRepository.getAll(db, user.id, type);
+
+			return getaways;
+		}),
 	pauseById: protectedProcedure
 		.input(IdInput)
-		.use(isUserGetawayGuard)
+		.use(isCustomerGatewayGuard)
 		.mutation(async ({ctx, input}) => {
 			const {id} = input;
-			const {db, actionsPublisher} = ctx;
+			const {db, actionPublisher} = ctx;
 
 			await Promise.all([
-				await GatewayRepository.pauseOne(db, id),
-				actionQueryHandler(db, actionsPublisher, 'resume', undefined, id),
+				GatewayRepository.pauseOne(db, id),
+				actionQueryHandler(db, actionPublisher, 'stop', undefined, id),
 			]);
 		}),
-
 	resumeById: protectedProcedure
 		.input(IdInput)
-		.use(isUserGetawayGuard)
+		.use(isCustomerGatewayGuard)
 		.mutation(async ({ctx, input}) => {
 			const {id} = input;
-			const {db, actionsPublisher} = ctx;
+			const {db, actionPublisher} = ctx;
 
-			await Promise.all([
-				GatewayRepository.resumeOne(db, id),
-				actionQueryHandler(db, actionsPublisher, 'resume', undefined, id),
-			]);
+			const gateway = await GatewayRepository.resumeOne(db, id);
+			if (!gateway) {
+				throw new TRPCError({code: 'BAD_REQUEST'});
+			}
+
+			await actionQueryHandler(db, actionPublisher, 'create', undefined, id);
 		}),
-
 	deleteById: protectedProcedure
 		.input(IdInput)
-		.use(isUserGetawayGuard)
+		.use(isCustomerGatewayGuard)
 		.mutation(async ({ctx, input}) => {
 			const {id} = input;
-			const {db, actionsPublisher} = ctx;
+			const {db, actionPublisher} = ctx;
 
 			await Promise.all([
 				GatewayRepository.removeOne(ctx.db, id),
-				actionQueryHandler(db, actionsPublisher, 'stop', undefined, id),
+				actionQueryHandler(db, actionPublisher, 'stop', undefined, id),
 			]);
 		}),
-
 	updateById: protectedProcedure
-		.input(UpdateGetawayInput)
-		.use(isUserGetawayGuard)
+		.input(UpdateGatewayInput)
+		.use(isCustomerGatewayGuard)
 		.mutation(async ({ctx, input}) => {
 			const {id, credenials, name, type} = input;
 

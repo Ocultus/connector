@@ -3,7 +3,7 @@ import {IdInput} from '../routes/types/base.input';
 import {middleware} from '../trpc/middleware';
 import {GatewayRepository} from '../repository/gateway.repository';
 
-export const isUserGetawayGuard = middleware(async opts => {
+export const isCustomerGatewayGuard = middleware(async opts => {
 	const {
 		ctx: {db, user},
 		next,
@@ -16,13 +16,13 @@ export const isUserGetawayGuard = middleware(async opts => {
 	}
 
 	const customerId = user.id;
-	const getawayId = result.data.id;
-	const isCustomerGetaway = await GatewayRepository.checkIsCustomerGetaway(
+	const gatewayId = result.data.id;
+	const isCustomerGateway = await GatewayRepository.checkCustomerIdentity(
 		db,
-		getawayId,
+		gatewayId,
 		customerId,
 	);
-	if (!isCustomerGetaway) {
+	if (!isCustomerGateway) {
 		throw new TRPCError({code: 'FORBIDDEN', message: ''});
 	}
 

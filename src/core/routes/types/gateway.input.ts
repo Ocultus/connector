@@ -5,16 +5,25 @@ import {
 } from '../../types/gateway.type';
 import {IdInput} from './base.input';
 
-export const FindByTypeGetawayInput = z.object({
+export const FindByTypeGatewayInput = z.object({
 	type: CredentialTypeRow,
 });
 
-export const CreateGetawayInput = GatewayCredentialsRow;
-
-export const UpdateGetawayInput = IdInput.merge(
+export const CreateGatewayInput = z.intersection(
+	GatewayCredentialsRow,
 	z.object({
-		credenials: GatewayCredentialsRow.optional(),
+		name: z.string().optional(),
+	}),
+);
+
+export const UpdateGatewayInput = IdInput.merge(
+	z.object({
+		credenials: GatewayCredentialsRow,
 		name: z.string().optional(),
 		type: CredentialTypeRow.optional(),
 	}),
 );
+
+export const GetAllGetawayInput = z.object({
+	type: CredentialTypeRow.optional(),
+})

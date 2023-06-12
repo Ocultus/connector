@@ -33,6 +33,7 @@ export const GatewayEntityRow = z.intersection(
 		z.object({
 			enabled: z.boolean(),
 			customerId: z.number(),
+			name: z.string(),
 		}),
 		z.union([VkCredentialsRow, TgCredentialsRow]),
 	),

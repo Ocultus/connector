@@ -31,7 +31,7 @@ export class ApplicationModule {
 		const amqpConsumer = await amqpFactory.makeConsumer(
 			coreMessageExchange,
 			coreMessageExchange,
-			`*`,
+			`core.messages.core`,
 			100,
 		);
 

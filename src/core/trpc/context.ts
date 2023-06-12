@@ -6,7 +6,7 @@ import _ from 'lodash';
 import Jwt, {JwtPayload} from 'jsonwebtoken';
 import {AuthorizationUser} from '../types/customer.type';
 import {CustomerRepository} from '../repository/customer.repository';
-import { AmqpFactoryModule } from '../../common/amqp';
+import {AmqpFactoryModule} from '../../common/amqp';
 
 const initDb = _.memoize(async () => {
 	const bootstrap = new Bootstrap();
@@ -35,26 +35,34 @@ const getUserByEmail = async (email: string) => {
 	return user ? AuthorizationUser.parse(user) : undefined;
 };
 
-const initActionsPublisher = _.memoize(async () => {
+const initPublishers = _.memoize(async () => {
 	const bootstrap = new Bootstrap();
-	const amqp = await bootstrap.initAmqpConnection(
-		configModule.getAmqpConfig(),
-	);
+	const amqp = await bootstrap.initAmqpConnection(configModule.getAmqpConfig());
 	const amqpFactory = new AmqpFactoryModule(amqp);
-	const {coreActionsExchange} = configModule.getRabbitMQExchange();
-	return amqpFactory.makePublisher(coreActionsExchange)
-})
+	const {coreActionsExchange, coreMessageExchange} =
+		configModule.getRabbitMQExchange();
+
+	const actionPublisher = await amqpFactory.makePublisher(coreActionsExchange);
+	const messagePublisher = await amqpFactory.makePublisher(coreMessageExchange);
+
+	return {
+		actionPublisher,
+		messagePublisher,
+	};
+});
 
 export async function createContext({req}: trpcNext.CreateNextContextOptions) {
 	const db = await initDb();
 	const authorizationHeader = req.headers.authorization;
 	const user = await getUserFromHeader(authorizationHeader);
-	const actionsPublisher = await initActionsPublisher() 
+	const {actionPublisher, messagePublisher} = await initPublishers();
 
 	return {
 		db,
 		user,
-		actionsPublisher,
+		actionPublisher,
+		messagePublisher,
+		req,
 	};
 }
 

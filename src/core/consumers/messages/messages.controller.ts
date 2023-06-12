@@ -4,43 +4,95 @@ import {ChatRepository} from '../../repository/chat.repository';
 import {DatabasePool} from 'slonik';
 import {ClientRepository} from '../../repository/client.repository';
 import {MessageRepository} from '../../repository/message.repository';
+import {RequestRepository} from '../../repository/request.repository';
+import {ChatEntity} from '../../types/chat.type';
+import {InsertMessage, UpdateMessage} from '../../types/message.type';
 
 export class MessageConsumer {
-	constructor(
-		private readonly db: DatabasePool,
-	) {}
+	constructor(private readonly db: DatabasePool) {}
 
 	recieveMessage = async (envelopes: Envelope[]) => {
-		const partitionedEnvelopesByChat = _.partition(envelopes, e => e.chatId);
-
+		const partitionedEnvelopesByChat = _.partition(envelopes, e => e.clientId);
 		for (const part of partitionedEnvelopesByChat) {
 			if (!part.length) {
 				continue;
 			}
-			const {chatId, name, getawayId} = part[0];
-			const chat = await ChatRepository.getChatById(this.db, chatId);
 
-      let db = this.db as any
-			if (!chat) {
-				const transaction = await this.db.transaction(async t => {
-					const client = await ClientRepository.getClient(t, name, chatId);
-					const chat = await ChatRepository.getChat(t, getawayId, chatId);
-				});
-        db = transaction
+			if (part[0].type === 'outgoing') {
+				continue;
 			}
 
-			for (const env of part) {
-				let parentId = null;
-				if (env.type === 'incoming') {
-					parentId = env.parentMessageId;
+			const {gatewayId, clientId, socialNetwork, clientName} = part[0];
+			const client = await ClientRepository.findByExternalId(
+				this.db,
+				clientId,
+				socialNetwork,
+			);
+			let chat: ChatEntity | null | undefined;
+
+			const newMessages: InsertMessage[] = [];
+			const editMessages: UpdateMessage[] = [];
+			part.forEach(envelope => {
+				if (
+					envelope.type === 'incoming' &&
+					envelope.eventType === 'new_message'
+				) {
+					const {payload, externalId} = envelope;
+					const message = {
+						payload,
+						externalId,
+					};
+					newMessages.push(message);
 				}
-				await MessageRepository.insertOne(
-					db,
-					parentId ? Number(parentId) : null,
-					env.chatId,
-					env.payload,
-					env.type,
+			});
+
+			part.forEach(envelope => {
+				if (
+					envelope.type == 'incoming' &&
+					envelope.eventType === 'edit_message'
+				) {
+					const {payload, externalId} = envelope;
+					const message = {
+						payload,
+						externalId,
+					};
+					editMessages.push(message);
+				}
+			});
+		
+			if (!client) {
+				const {id} = await ClientRepository.insertOne(
+					this.db,
+					clientId,
+					clientName,
+					socialNetwork,
 				);
+				chat = await ChatRepository.insertOne(this.db, id, gatewayId);
+				await RequestRepository.insertOne(this.db, gatewayId, chat.id);
+			} else {
+				chat = await ChatRepository.getByClientAndGateway(this.db, client.id, gatewayId);
+
+				if (!chat) {
+					chat = await ChatRepository.insertOne(this.db, client.id, gatewayId);
+				} else {
+					const gatewayHasNonClosedRequests =
+						await RequestRepository.checkNonClosed(this.db, gatewayId, chat.id);
+					if (!gatewayHasNonClosedRequests) {
+						await RequestRepository.insertOne(this.db, gatewayId, chat.id);
+					}
+				}
+			}
+
+			if (!chat) {
+				continue;
+			}
+
+			if (newMessages.length) {
+				await MessageRepository.batchInsert(this.db, chat.id, newMessages);
+			}
+
+			if (editMessages.length) {
+				await MessageRepository.batchUpdate(this.db, chat.id, editMessages);
 			}
 		}
 	};

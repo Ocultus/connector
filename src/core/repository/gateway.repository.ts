@@ -1,52 +1,94 @@
-import {DatabasePool, NotFoundError, SlonikError} from 'slonik';
+import {
+	DatabasePool,
+	IntegrityConstraintViolationError,
+	NotFoundError,
+	SlonikError,
+} from 'slonik';
 import {CredentialType, GatewayEntityRow} from '../types/gateway.type';
 import {TRPCError} from '@trpc/server';
 import {sql} from '../types/db.type';
 
 export class GatewayRepository {
-	static async getAll(db: DatabasePool) {
+	static async insertOne(
+		db: DatabasePool,
+		credentials: any,
+		type: CredentialType,
+		userId: number,
+		name: string,
+	) {
 		try {
-			const getaways = await db.many(
+			const credentialsJson = JSON.stringify(credentials);
+			const gateway = await db.one(
 				sql.type(GatewayEntityRow)`
-				SELECT * FROM gateway
-			`,
+      	INSERT INTO gateway (name, credentials, type, customer_id)
+      	VALUES (${name}, ${credentialsJson}, ${type}, ${userId})
+				RETURNING *
+    	`,
 			);
-
-			return getaways;
+			return gateway;
 		} catch (error) {
-			if (error instanceof NotFoundError) {
-				return [];
+			if (error instanceof IntegrityConstraintViolationError) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'Gateway with this credentials already exists',
+				});
 			}
 
-			throw new Error('gateways not found');
+			if (error instanceof SlonikError) {
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: error.message,
+				});
+			}
 		}
+	}
+
+	static async countOfCustomerGateways(db: DatabasePool, customerId: number) {
+		return db.one(sql.typeAlias('number')`
+			SELECT count(id) as number FROM gateway
+			WHERE customer_id = ${customerId}
+		`);
+	}
+
+	static async getAll(db: DatabasePool, customerId: number, type?: CredentialType) {
+		return db.any(
+			sql.type(GatewayEntityRow)`
+				SELECT * FROM gateway
+				WHERE customer_id = ${customerId}
+				${type ? sql.fragment`AND type = ${type}` : sql.fragment``}
+			`,
+		);
 	}
 
 	static async getById(db: DatabasePool, id: number) {
 		return db.one(sql.type(GatewayEntityRow)`
 			SELECT * FROM gateway
 			WHERE id = ${id} 
-		`)
+		`);
 	}
 
-	static async checkIsCustomerGetaway(db: DatabasePool, id: number, customerId: number) {
+	static async checkCustomerIdentity(
+		db: DatabasePool,
+		id: number,
+		customerId: number,
+	) {
 		return db.exists(sql.typeAlias('void')`
 			SELECT 1 FROM gateway
 			WHERE id = ${id} 
 			AND customer_id = ${customerId}
-		`)
+		`);
 	}
 
 	static async findByType(db: DatabasePool, type: CredentialType) {
 		try {
-			const getaways = await db.many(
+			const gateways = await db.any(
 				sql.type(GatewayEntityRow)`
 				SELECT * FROM gateway 
 				WHERE type = ${type};
 			`,
 			);
 
-			return getaways;
+			return gateways;
 		} catch (error) {
 			if (error instanceof NotFoundError) {
 				return [];
@@ -61,63 +103,18 @@ export class GatewayRepository {
 		}
 	}
 
-	static async insertOne(
-		db: DatabasePool,
-		credentials: any,
-		type: CredentialType,
-		userId: number,
-		name?: string,
-	) {
-		try {
-			let getawayName = name;
-			if (!getawayName) {
-				const countOfCustomerGateways = await db.one(sql.typeAlias('number')`
-					SELECT count(id) as number FROM gateway
-					WHERE customer_id = ${userId}
-				`);
-				getawayName = `Проект ${countOfCustomerGateways.number}`;
-			}
-			const credentialsJson = JSON.stringify(credentials);
-			const getaway = await db.one(
-				sql.type(GatewayEntityRow)`
-      	INSERT INTO gateway (name, credentials, type, customer_id)
-      	VALUES (${getawayName}, ${credentialsJson}, ${type}, ${userId})
-				RETURNING *
-    	`,
-			);
-			return getaway;
-		} catch (error) {
-			if (error instanceof SlonikError) {
-				throw new TRPCError({
-					code: 'INTERNAL_SERVER_ERROR',
-					message: error.message,
-				});
-			}
-		}
-	}
-
 	static async pauseOne(db: DatabasePool, id: number) {
-		try {
-			await db.query(sql.typeAlias('void')`
-      	UPDATE gateway SET enabled = FALSE 
-      	WHERE id = ${id}
-    	`);
-		} catch (error) {
-			if (error instanceof SlonikError) {
-				throw new TRPCError({
-					code: 'INTERNAL_SERVER_ERROR',
-					message: error.message,
-				});
-			}
-
-			throw new TRPCError({code: 'INTERNAL_SERVER_ERROR'});
-		}
+		return db.maybeOne(sql.typeAlias('void')`
+      UPDATE gateway SET enabled = FALSE 
+      WHERE id = ${id}
+    `);
 	}
 
 	static async resumeOne(db: DatabasePool, id: number) {
-		db.query(sql.typeAlias('void')`
+		return db.query(sql.type(GatewayEntityRow)`
       UPDATE gateway SET enabled = TRUE 
       WHERE id = ${id}
+			RETURNING *
     `);
 	}
 
