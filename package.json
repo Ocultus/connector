@@ -25,7 +25,6 @@
     "@trpc/server": "^10.28",
     "amqplib": "^0.10.3",
     "bcrypt": "^5.1.0",
-    "dayjs": "^1.11.7",
     "dotenv": "^16.0.3",
     "fastify": "^4.13.0",
     "file-type": "^12.0.1",
@@ -48,7 +47,6 @@
   },
   "scripts": {
     "build": "tsc -p .",
-    "run:all": "yarn run:vk-gateway & yarn run:tg-gateway & yarn run:core & yarn run:cloud-storage",
     "run:vk-gateway": "node -r source-map-support/register ./dist/src/vk-gateway/app.module.js",
     "run:vk-gateway:dev": "ts-node-dev src/vk-gateway/app.module.ts",
     "run:tg-gateway": "node -r source-map-support/register ./dist/src/tg-gateway/app.module.js",
