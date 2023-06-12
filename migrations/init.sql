@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS gateway (
     id SERIAL CONSTRAINT "gateway_pk" PRIMARY KEY,
     name VARCHAR NOT NULL,
     customer_id SERIAL NOT NULL REFERENCES customer(id),
-    credentials jsonb NOT NULL,
+    credentials jsonb NOT NULL UNIQUE,
     type gateway_type NOT NULL,
     enabled boolean NOT NULL DEFAULT true,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -30,16 +30,18 @@ CREATE TABLE IF NOT EXISTS gateway (
 
 CREATE TABLE IF NOT EXISTS client (
     id SERIAL CONSTRAINT "client_pk" PRIMARY KEY,
+    social_network gateway_type NOT NULL,
     external_id SERIAL NOT NULL,
     name VARCHAR NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS "client_external_id_idx" ON client USING btree (external_id);
+CREATE UNIQUE INDEX IF NOT EXISTS client_identity ON client(external_id, social_network)
 
 CREATE TABLE IF NOT EXISTS chat (
     id SERIAL CONSTRAINT "chat_pk" PRIMARY KEY,
     client_id SERIAL NOT NULL CONSTRAINT client_id_fk REFERENCES client ON UPDATE cascade ON DELETE CASCADE,
+    gateway_id SERIAL NOT NULL CONSTRAINT gateway_id_fk REFERENCES gateway,
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
@@ -47,7 +49,8 @@ CREATE TYPE message_type_enum as ENUM ('incoming','outgoing');
 
 CREATE TABLE IF NOT EXISTS message (
     id SERIAL CONSTRAINT "message_pk" PRIMARY KEY,
-    parent_id SERIAL REFERENCES message(id),
+    parent_id INT DEFAULT NULL,
+    external_id SERIAL NOT NULL,
     chat_id SERIAL REFERENCES chat(id),
     payload jsonb NOT NULL,
     type message_type_enum NOT NULL,
@@ -58,7 +61,7 @@ CREATE TYPE request_type_enum as ENUM ('open','pending','closed');
 
 CREATE TABLE IF NOT EXISTS request (
     id SERIAL CONSTRAINT "request_pk" PRIMARY KEY,
-    gateway_id SERIAL NOT NULL CONSTRAINT request_getaway_id REFERENCES gateway ON UPDATE CASCADE ON DELETE CASCADE,
+    gateway_id SERIAL NOT NULL CONSTRAINT request_gateway_id REFERENCES gateway ON UPDATE CASCADE ON DELETE CASCADE,
     chat_id SERIAL NOT NULL CONSTRAINT chat_id_fk REFERENCES chat ON UPDATE CASCADE ON DELETE CASCADE,
     type request_type_enum NOT NULL DEFAULT 'open',
     updated_at TIMESTAMP,
