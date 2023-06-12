@@ -13,8 +13,6 @@ export class AmqpConnectionProviderModule {
 	}
 
 	public init = async () => {
-		await sleep(20);
-
 		if (Array.isArray(this.options)) {
 			Promise.all(
 				this.options.map(async opt => {

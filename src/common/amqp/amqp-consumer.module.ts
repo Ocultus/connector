@@ -37,7 +37,6 @@ export class AmqpConsumerModule {
 			this.channel.prefetch(this.prefetch);
 
 			this.channel.on('close', async () => {
-				await sleep(20);
 				await this.init(retry + 1);
 			});
 		} catch (e) {
@@ -45,7 +44,6 @@ export class AmqpConsumerModule {
 				throw e;
 			}
 
-			await sleep(10);
 			await this.init(retry + 1);
 		}
 	};

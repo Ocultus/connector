@@ -2,7 +2,7 @@ import {createPool, DatabasePool, stringifyDsn} from 'slonik';
 import {createFieldNameTransformationInterceptor} from 'slonik-interceptor-field-name-transformation';
 import {AmqpConnectionProviderModule} from './amqp';
 import {DatabaseConfig, RabbitMqConfig} from './config/config.module';
-import { createQueryLoggingInterceptor } from 'slonik-interceptor-query-logging';
+import {createQueryLoggingInterceptor} from 'slonik-interceptor-query-logging';
 
 export class Bootstrap {
 	private pgClient?: DatabasePool;

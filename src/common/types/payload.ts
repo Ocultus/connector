@@ -1,46 +1,71 @@
-export type ImageAttachment = {
-	url: string;
-	type: 'image';
-};
+import {z} from 'zod';
 
-export type AudioAttachment = {
-	url: string;
-	type: 'audio';
-	title?: string;
-};
+const ImageAttachmentRow = z.object({
+	url: z.string(),
+	type: z.literal('image'),
+});
 
-export type DocumentAttachment = {
-	url: string;
-	type: 'document';
-	title?: string;
-	extension?: string;
-};
+export type ImageAttachment = z.infer<typeof ImageAttachmentRow>;
 
-export type Attachment = ImageAttachment | AudioAttachment | DocumentAttachment;
+const AudioAttachmentRow = z.object({
+	url: z.string(),
+	type: z.literal('audio'),
+	title: z.string().optional(),
+});
 
-export type MessagePayload = {
-	text?: string;
-	attachments: Attachment[];
-};
+export type AudioAttachment = z.infer<typeof AudioAttachmentRow>;
 
-export type EventType = 'new_message' | 'edit_message';
+const DocumentAttachmentRow = z.object({
+	url: z.string(),
+	type: z.literal('document'),
+	title: z.string().optional(),
+	extension: z.string().optional(),
+});
 
-export type Envelope = {
-	chatId: number;
-	getawayId: number;
-	payload: MessagePayload;
-} & (
-	| {
-			id: string;
-			name: string;
-			type: 'incoming';
-			eventType: EventType;
-			externalMessageId: number;
-			sentAt: string;
-			parentMessageId?: string;
-			parentExternalMessageId? : number; 
-	  }
-	| {
-			type: 'outgoing';
-	  }
+export type DocumentAttachment = z.infer<typeof DocumentAttachmentRow>;
+
+export const AttachmentRow = z.union([
+	ImageAttachmentRow,
+	AudioAttachmentRow,
+	DocumentAttachmentRow,
+]);
+
+export type Attachment = z.infer<typeof AttachmentRow>;
+
+export const MessagePayloadRow = z.object({
+	text: z.string().optional(),
+	attachments: z.array(AttachmentRow),
+});
+
+export type MessagePayload = z.infer<typeof MessagePayloadRow>;
+
+const EventTypeRow = z.enum(['new_message', 'edit_message']);
+
+export type EventType = z.infer<typeof EventTypeRow>;
+
+export const SocialNetworkRow = z.enum(['vk', 'tg']);
+
+export type SocialNetwork = z.infer<typeof SocialNetworkRow>;
+
+const EnvelopeRow = z.intersection(
+	z.object({
+		clientId: z.number(),
+		payload: MessagePayloadRow,
+		eventType: EventTypeRow,
+		gatewayId: z.number(),
+	}),
+	z
+		.object({
+			id: z.number(),
+			type: z.literal('incoming'),
+			socialNetwork: SocialNetworkRow,
+			clientName: z.string(),
+			externalId: z.number(),
+			sentAt: z.string(),
+			parentMessageId: z.number().optional(),
+			parentExternalMessageId: z.number().optional(),
+		})
+		.or(z.object({type: z.literal('outgoing')})),
 );
+
+export type Envelope = z.infer<typeof EnvelopeRow>;
