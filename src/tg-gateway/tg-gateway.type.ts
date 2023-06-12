@@ -43,7 +43,7 @@ export type EditMessageCtx = NarrowedContext<
 
 export type TgMessage = (Update.Edited | Update.New) &
 	ReplyMessage &
- 	Update.NonChannel &
+	Update.NonChannel &
 	PartialMessageAttachmentFields;
 
 export type TgAttachment = {

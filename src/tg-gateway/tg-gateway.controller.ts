@@ -2,9 +2,8 @@ import {
 	Attachment as InternalAttachment,
 	EventType,
 } from '../common/types/payload';
-import {AmqpConsumerModule, AmqpPublisherModule} from '../common/amqp';
+import {AmqpPublisherModule} from '../common/amqp';
 import {Envelope} from '../common/types/payload';
-import {randomUUID} from 'crypto';
 import {Telegraf} from 'telegraf';
 import {EndpointsConfig} from '../common/config/config.module';
 import {
@@ -27,13 +26,12 @@ export class TgGatewayController {
 	constructor(
 		readonly id: number,
 		readonly token: string,
-		private readonly consumer: AmqpConsumerModule,
 		private readonly publisher: AmqpPublisherModule,
 		readonly endpoints: EndpointsConfig,
 		readonly logger: Logger<LoggerOptions | DestinationStream>,
 		private cloudStorageClient: CreateTRPCProxyClient<CloudStorageRouter>,
 	) {
-		this.telegaf = new Telegraf(token);		
+		this.telegaf = new Telegraf(token);
 	}
 
 	public init = async () => {
@@ -41,20 +39,15 @@ export class TgGatewayController {
 			this.telegaf.on('message', ctx => {
 				this.handleNewMessage(ctx);
 			});
-	
+
 			this.telegaf.on('edited_message', ctx => {
 				this.handleEditMessage(ctx);
 			});
-	
-			await this.telegaf.launch();
-			await this.consumer.consume<Envelope>(this.sendMessage);
-		} catch (error) {
-			this.logger.error(error)
-		}
-	};
 
-	public getMessageQueueName = () => {
-		return 'tg.in.bot' + this.id;
+			this.telegaf.launch();
+		} catch (error) {
+			this.logger.error(error);
+		}
 	};
 
 	public pause = async () => {
@@ -65,13 +58,13 @@ export class TgGatewayController {
 		await this.telegaf.launch();
 	};
 
-	private sendMessage = async (envelope: Envelope) => {
+	public sendMessage = async (envelope: Envelope) => {
 		if (envelope.type !== 'outgoing') {
 			return;
 		}
 
 		const attachmentsRaw = envelope.payload.attachments;
-		const chatId = envelope.chatId;
+		const chatId = envelope.clientId;
 		if (attachmentsRaw.length === 1) {
 			const attachment = attachmentsRaw[0];
 			if (attachment.type === 'audio') {
@@ -143,14 +136,13 @@ export class TgGatewayController {
 				await this.telegaf.telegram.sendMediaGroup(chatId, documents);
 			}
 		} else if (envelope.payload.text) {
-			this.telegaf.telegram.sendMessage(chatId, envelope.payload.text);
+			await this.telegaf.telegram.sendMessage(chatId, envelope.payload.text);
 		}
 	};
 
 	private handleNewMessage = async (ctx: NewMessageCtx) => {
-		console.log(ctx.update.message);
 		const messages = await this.handleMessage(ctx.message, 'new_message');
-		this.publisher.publish(messages, this.getMessageQueueName());
+		this.publisher.publish(messages, 'core.messages.core');
 	};
 
 	private handleEditMessage = async (ctx: EditMessageCtx) => {
@@ -158,7 +150,7 @@ export class TgGatewayController {
 			ctx.update.edited_message,
 			'edit_message',
 		);
-		this.publisher.publish(messages, this.getMessageQueueName());
+		this.publisher.publish(messages, 'core.messages.core');
 	};
 
 	private fileIdToUrl = async (fileId: string): Promise<URL> => {
@@ -168,7 +160,8 @@ export class TgGatewayController {
 	private handleMessage = async (
 		ctx: TgMessage,
 		eventType: EventType,
-		parentMessageId?: string,
+		messageId: number = 0,
+		parentMessageId?: number,
 	): Promise<Envelope[]> => {
 		const containsAttachmetnts =
 			!!ctx.document || !!ctx.photo?.length || !!ctx.audio || !!ctx.voice;
@@ -183,17 +176,17 @@ export class TgGatewayController {
 			return [];
 		}
 
-		const messageId = randomUUID();
 		let envelope: Envelope = {
 			id: messageId,
-			externalMessageId: ctx.message_id,
+			externalId: ctx.message_id,
 			eventType,
-			getawayId: this.id,
+			gatewayId: this.id,
 			parentMessageId: parentMessageId,
 			type: 'incoming',
 			sentAt: new Date(ctx.date).toISOString(),
-			chatId: this.telegaf.botInfo!.id,
-			name: ctx.from.first_name + ctx.from.last_name,
+			clientId: ctx.from.id,
+			socialNetwork: 'tg',
+			clientName: ctx.from.first_name + ctx.from.last_name,
 			payload: {
 				text: ctx.text ?? ctx.caption ?? undefined,
 				attachments: [],
@@ -212,7 +205,6 @@ export class TgGatewayController {
 			const attachment = await this.handleMessageAttachments(
 				rawAttachments,
 				ctx.from.id,
-				ctx.chat.id,
 			);
 
 			envelope.payload.attachments = attachment ? [attachment] : [];
@@ -222,6 +214,7 @@ export class TgGatewayController {
 			const message = await this.handleMessage(
 				ctx.reply_to_message as TgMessage,
 				eventType,
+				messageId + 1,
 				messageId,
 			);
 			return [...message, envelope];
@@ -233,7 +226,6 @@ export class TgGatewayController {
 	private handleMessageAttachments = async (
 		attachments: TgAttachment,
 		userId: number,
-		chatId: number,
 	): Promise<InternalAttachment | undefined> => {
 		let attachment;
 		if (attachments.audio) {
