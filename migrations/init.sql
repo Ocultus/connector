@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS client (
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS client_identity ON client(external_id, social_network)
+CREATE UNIQUE INDEX IF NOT EXISTS client_identity ON client(external_id, social_network);
 
 CREATE TABLE IF NOT EXISTS chat (
     id SERIAL CONSTRAINT "chat_pk" PRIMARY KEY,
